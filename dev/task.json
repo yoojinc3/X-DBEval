@@ -1,0 +1,144 @@
+[
+    {
+        "id": 1,
+        "db_id": [
+            "chicago_crime",
+            "food_inspection_2"
+        ],
+        "difficulty": "simple",
+        "question": "Across all Chicago wards, compute the Pearson correlation coefficient between the ward-level food inspection failure rate and the ward-level crime arrest rate.",
+        "evidence": "Only include wards that have both food inspection and crime data.",
+        "intermediate_sqls": [
+            {
+                "db": "food_inspection_2",
+                "sql": "SELECT e.ward, CAST(SUM(CASE WHEN i.results = 'Fail' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS fail_rate FROM establishment AS e INNER JOIN inspection AS i ON e.license_no = i.license_no GROUP BY e.ward"
+            },
+            {
+                "db": "chicago_crime",
+                "sql": "SELECT ward_no, CAST(SUM(CASE WHEN arrest = 'TRUE' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS arrest_rate FROM Crime GROUP BY ward_no"
+            }
+        ],
+        "analysis": "Join the two result sets on ward. For overlapping wards only, compute the Pearson correlation coefficient between fail_rate (x) and arrest_rate (y).",
+        "result": 0.518,
+        "tolerance": 0.001
+    },
+    {
+        "id": 2,
+        "db_id": [
+            "chicago_crime",
+            "sales_in_weather"
+        ],
+        "difficulty": "challenging",
+        "question": "To examine how harsh weather relates to domestic violence in Chicago, compute the Welch's t-statistic and p-value comparing monthly domestic violence crime rates between harsh and non-harsh months. Return the result as {\"t\": <float>, \"p\": <float>}",
+        "evidence": "A month is classified as 'harsh' if its average daily precipitation across all weather stations exceeds the 75th percentile of all monthly averages. Only include months present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "sales_in_weather",
+                "sql": "SELECT SUBSTR(date, 1, 7) AS yr_month, AVG(station_avg) AS avg_precip FROM (SELECT station_nbr, SUBSTR(date, 1, 7) AS yr_month, AVG(preciptotal) AS station_avg FROM weather WHERE preciptotal IS NOT NULL GROUP BY station_nbr, SUBSTR(date, 1, 7)) GROUP BY yr_month"
+            },
+            {
+                "db": "chicago_crime",
+                "sql": "SELECT PRINTF('%04d-%02d', CAST(SUBSTR(date, INSTR(date,'/')+INSTR(SUBSTR(date,INSTR(date,'/')+1),'/') +1, 4) AS INT), CAST(SUBSTR(date, 1, INSTR(date,'/')-1) AS INT)) AS yr_month, CAST(SUM(CASE WHEN domestic = 'TRUE' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS dv_rate FROM Crime GROUP BY yr_month"
+            }
+        ],
+        "analysis": "Join the two monthly series on yr_month. Compute the 75th percentile of avg_precip. Label each month as 'harsh' (avg_precip > p75) or 'non-harsh'. Run a two-sided Welch's t-test on dv_rate between the two groups.",
+        "result": {
+            "t": 2.27,
+            "p": 0.113
+        },
+        "tolerance": {
+            "t": 0.01,
+            "p": 0.001
+        }
+    },
+    {
+        "id": 3,
+        "db_id": [
+            "synthea",
+            "mental_health_survey"
+        ],
+        "difficulty": "challenging",
+        "question": "To examine whether age groups with higher self-reported mental health burden incur greater medical costs, run a gender-stratified Welch's t-test comparing total claim amounts per patient between high-burden and low-burden age groups within each gender. Return the result as {\"female_t\": <float>, \"female_p\": <float>, \"male_t\": <float>, \"male_p\": <float>}.",
+        "evidence": "Define age groups as: 18-34, 35-49, 50-65. Only include survey respondents whose gender is exactly 'Male' or 'Female' and whose age is between 18 and 65. Mental health burden rate = proportion of respondents answering 'Yes' per gender x age group. Within each gender, classify age groups as high-burden if their rate exceeds the median rate across age groups within that gender. Use living patients only (deathdate IS NULL). Only include gender x age groups present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "mental_health_survey",
+                "sql": "SELECT a_gender.AnswerText AS gender, CASE WHEN CAST(a_age.AnswerText AS INT) BETWEEN 18 AND 34 THEN '18-34' WHEN CAST(a_age.AnswerText AS INT) BETWEEN 35 AND 49 THEN '35-49' WHEN CAST(a_age.AnswerText AS INT) BETWEEN 50 AND 65 THEN '50-65' END AS age_group, CAST(SUM(CASE WHEN a_mh.AnswerText = 'Yes' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS mh_rate FROM Answer a_mh JOIN Answer a_gender ON a_mh.UserID = a_gender.UserID AND a_mh.SurveyID = a_gender.SurveyID JOIN Answer a_age ON a_mh.UserID = a_age.UserID AND a_mh.SurveyID = a_age.SurveyID WHERE a_mh.QuestionID = 33 AND a_gender.QuestionID = 2 AND a_gender.AnswerText IN ('Male', 'Female') AND a_age.QuestionID = 1 AND CAST(a_age.AnswerText AS INT) BETWEEN 18 AND 65 GROUP BY gender, age_group"
+            },
+            {
+                "db": "synthea",
+                "sql": "SELECT p.patient, p.gender, CASE WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 18 AND 34 THEN '18-34' WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 35 AND 49 THEN '35-49' WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 50 AND 65 THEN '50-65' END AS age_group, SUM(cl.TOTAL) AS total_claims FROM patients p JOIN claims cl ON p.patient = cl.PATIENT WHERE p.deathdate IS NULL GROUP BY p.patient"
+            }
+        ],
+        "analysis": "Step 1: Compute mh_rate per gender x age_group from survey. Step 2: Within each gender, compute median mh_rate across its 3 age groups. Classify each age group as high-burden (rate > median) or low-burden. Step 3: Map Male to M, Female to F. For each patient in synthea, assign high/low label based on their gender x age_group. Step 4: Run two-sided Welch t-test on total_claims within each gender separately.",
+        "result": {
+            "female_t": -0.46,
+            "female_p": 0.64,
+            "male_t": -4.42,
+            "male_p": 0.0
+        },
+        "tolerance": {
+            "female_t": 0.01,
+            "female_p": 0.01,
+            "male_t": 0.01,
+            "male_p": 0.01
+        }
+    },
+    {
+        "id": 4,
+        "db_id": [
+            "student_loan",
+            "college_completion"
+        ],
+        "difficulty": "challenging",
+        "question": "To assess whether graduation outcomes predict post-enrollment adversity, compute the Spearman correlation between a school's 150% graduation rate and its composite adverse outcome rate. Return the result as {\"spearman_r\": <float>, \"p_value\": <float>}.",
+        "evidence": "Adverse outcome is defined as a student who is unemployed, has filed for bankruptcy, or has a payment due. Only include schools present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "student_loan",
+                "sql": "SELECT e.school, CAST(COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR fb.name IS NOT NULL OR np.bool = 'pos' THEN e.name END) AS REAL) / COUNT(DISTINCT e.name) AS adverse_rate FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy fb ON e.name = fb.name LEFT JOIN no_payment_due np ON e.name = np.name GROUP BY e.school"
+            },
+            {
+                "db": "college_completion",
+                "sql": "SELECT chronname, grad_150_value FROM institution_details WHERE grad_150_value IS NOT NULL"
+            }
+        ],
+        "analysis": "Map school abbreviations to full names. Join on school name. Compute Spearman r and two-sided p-value between grad_150_value and adverse_rate across overlapping schools.",
+        "result": {
+            "spearman_r": -0.06,
+            "p_value": 0.913
+        },
+        "tolerance": {
+            "spearman_r": 0.01,
+            "p_value": 0.001
+        }
+    },
+    {
+        "id": 5,
+        "db_id": [
+            "student_loan",
+            "college_completion",
+            "human_resources"
+        ],
+        "difficulty": "challenging",
+        "question": "To examine whether institutional spending relative to labor market pay predicts student financial distress, compute the Pearson correlation between each school's spending-to-labor-market ratio and its student adverse outcome rate. Return the result as {\"r\": <float>}.",
+        "evidence": "Adverse outcome is defined as a student who is unemployed, has filed for bankruptcy, or has a payment due. Spending-to-labor-market ratio = exp_award_value divided by the average maximum salary of bachelor's-level positions. Only include schools present in all three databases.",
+        "intermediate_sqls": [
+            {
+                "db": "student_loan",
+                "sql": "SELECT e.school, CAST(COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR fb.name IS NOT NULL OR np.bool = 'pos' THEN e.name END) AS REAL) / COUNT(DISTINCT e.name) AS adverse_rate FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy fb ON e.name = fb.name LEFT JOIN no_payment_due np ON e.name = np.name GROUP BY e.school"
+            },
+            {
+                "db": "college_completion",
+                "sql": "SELECT chronname, exp_award_value FROM institution_details WHERE exp_award_value IS NOT NULL"
+            },
+            {
+                "db": "human_resources",
+                "sql": "SELECT AVG(CAST(REPLACE(REPLACE(maxsalary, 'US$', ''), ',', '') AS REAL)) AS avg_maxsalary FROM position WHERE educationrequired = '4 year degree'"
+            }
+        ],
+        "analysis": "Step 1: Map student_loan school abbreviations to full names, compute adverse_rate per school. Step 2: Join with college_completion on school name to get exp_award_value per school. Step 3: Fetch bachelor's avg maxsalary scalar from human_resources. Step 4: Compute ratio = exp_award_value / avg_maxsalary per school. Step 5: Compute Pearson r between ratio and adverse_rate across overlapping schools.",
+        "result": -0.63,
+        "tolerance": 0.01
+    }
+]
