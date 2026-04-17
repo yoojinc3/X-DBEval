@@ -1,552 +1,460 @@
-#!/usr/bin/env python3
-"""
-Baseline LLM Benchmark Evaluator
-==================================
-
-Single-prompt baseline: sends the merged schema of all relevant databases
-plus the question to Claude in one turn. The model returns SQL queries only.
-The script executes those SQL queries against the real databases, applies
-deterministic post-processing (Pearson, OLS, etc.), and compares the result
-to the gold answer.
-
-USAGE:
-------
-  python run_baseline.py <benchmark_json> <output_file> \\
-      --schema-file schemas.json \\
-      --database-dir ./databases \\
-      [--model claude-sonnet-4-5]
-
-DATABASE DIRECTORY STRUCTURE:
-------------------------------
-  databases/
-  ├── olympics/olympics.sqlite
-  ├── world_development_indicators/world_development_indicators.sqlite
-  └── financial/financial.sqlite   (if needed)
-
-PREREQUISITES:
---------------
-  pip install anthropic
-  export ANTHROPIC_API_KEY=sk-ant-...
-"""
-
 import argparse
 import json
-import math
+import os
 import re
 import sqlite3
-import sys
+import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
 
 import anthropic
+from dotenv import load_dotenv
+
+load_dotenv()
+
+MAX_ROWS = 500
 
 
-# ---------------------------------------------------------------------------
-# Name mapping for Olympics → WDI country names
-# ---------------------------------------------------------------------------
+def get_schema(db_path: str) -> str:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
 
-NAME_MAP = {
-    "USA": "United States",
-    "UK": "United Kingdom",
-    "Russia": "Russian Federation",
-    "South Korea": "Korea, Rep.",
-    "Iran": "Iran, Islamic Rep.",
-    "Egypt": "Egypt, Arab Rep.",
-    "Venezuela": "Venezuela, RB",
-    "Kyrgyzstan": "Kyrgyz Republic",
-    "Slovakia": "Slovak Republic",
-    "Bahamas": "Bahamas, The",
-    "Ivory Coast": "Cote d'Ivoire",
-    "Boliva": "Bolivia",
-}
+    cur.execute(
+        "SELECT name, sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL ORDER BY name"
+    )
+    tables = cur.fetchall()
 
-SKIP_COUNTRIES = {
-    "Soviet Union", "East Germany", "West Germany", "Unified Team",
-    "Yugoslavia", "Czechoslovakia", "Serbia and Montenegro", "Taiwan",
-    "North Korea", "Individual Olympic Athletes", "Australasia",
-    "Refugee Olympic Team", "Unknown", "West Indies Federation",
-    "Saar", "Bohemia",
-}
-
-
-# ---------------------------------------------------------------------------
-# Database helpers
-# ---------------------------------------------------------------------------
-
-def get_db_path(database_dir: Path, db_id: str) -> Path:
-    return database_dir / db_id / f"{db_id}.sqlite"
-
-
-def execute_sql(database_dir: Path, db_id: str, sql: str) -> Tuple[List[str], List[tuple]]:
-    """Execute SQL and return (column_names, rows)."""
-    db_path = get_db_path(database_dir, db_id)
-    if not db_path.exists():
-        raise FileNotFoundError(f"Database not found: {db_path}")
-    conn = sqlite3.connect(str(db_path))
-    try:
-        cursor = conn.execute(sql)
-        cols = [d[0] for d in cursor.description] if cursor.description else []
-        rows = cursor.fetchall()
-        return cols, rows
-    finally:
-        conn.close()
-
-
-def format_table(cols: List[str], rows: List[tuple], max_rows: int = 15) -> str:
-    if not rows:
-        return "  (no results)"
-    display = rows[:max_rows]
-    widths = {c: len(c) for c in cols}
-    for row in display:
-        for c, v in zip(cols, row):
-            widths[c] = min(max(widths[c], len(str(v))), 50)
-    header = "  " + " | ".join(f"{c:<{widths[c]}}" for c in cols)
-    sep = "  " + "-+-".join("-" * widths[c] for c in cols)
-    lines = [header, sep]
-    for row in display:
-        lines.append("  " + " | ".join(f"{str(v):<{widths[c]}}" for c, v in zip(cols, row)))
-    if len(rows) > max_rows:
-        lines.append(f"  ... ({len(rows)} rows total)")
-    return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# Statistical post-processing (deterministic)
-# ---------------------------------------------------------------------------
-
-def normalize_country(name: str) -> Optional[str]:
-    if name in SKIP_COUNTRIES:
-        return None
-    return NAME_MAP.get(name, name)
-
-
-def extract_country_map(rows: List[tuple]) -> Dict[str, float]:
-    """Extract {country: value} from (country, value) rows."""
-    return {str(r[0]): float(r[1]) for r in rows if r[0] and r[1] is not None}
-
-
-def join_datasets(map_oly: Dict[str, float], map_wdi: Dict[str, float]) -> List[Tuple[float, float, str]]:
-    """Join olympics → WDI maps using name normalization. Returns [(oly_val, wdi_val, oly_name)]."""
-    pairs = []
-    for oly_name, val in map_oly.items():
-        wdi_name = normalize_country(oly_name)
-        if wdi_name and wdi_name in map_wdi:
-            pairs.append((val, map_wdi[wdi_name], oly_name))
-    return pairs
-
-
-def pearson(pairs: List[Tuple[float, float]]) -> float:
-    n = len(pairs)
-    sx = sum(x for x, y in pairs)
-    sy = sum(y for x, y in pairs)
-    sxy = sum(x * y for x, y in pairs)
-    sx2 = sum(x * x for x, y in pairs)
-    sy2 = sum(y * y for x, y in pairs)
-    num = n * sxy - sx * sy
-    den = math.sqrt((n * sx2 - sx ** 2) * (n * sy2 - sy ** 2))
-    return num / den if den else 0.0
-
-
-def ols_slope(pairs: List[Tuple[float, float]]) -> float:
-    """Simple OLS slope: β = (n*Σxy - Σx*Σy) / (n*Σx² - (Σx)²), x=gdp, y=medals."""
-    n = len(pairs)
-    sx = sum(x for x, y in pairs)
-    sy = sum(y for x, y in pairs)
-    sxy = sum(x * y for x, y in pairs)
-    sx2 = sum(x * x for x, y in pairs)
-    denom = n * sx2 - sx ** 2
-    return (n * sxy - sx * sy) / denom if denom else 0.0
-
-
-def ols_multi(triples: List[Tuple[float, float, float]]) -> Tuple[float, float, float]:
-    """OLS with intercept + 2 predictors. Returns (β₀, β₁, β₂).
-    X = [1, gdp, pop], y = medals.
-    """
-    n = len(triples)
-
-    def mm(A, B):
-        ra, ca = len(A), len(A[0])
-        cb = len(B[0])
-        return [[sum(A[i][k] * B[k][j] for k in range(ca)) for j in range(cb)] for i in range(ra)]
-
-    def inv3(M):
-        a = [list(row) for row in M]
-        det = (a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1])
-               - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0])
-               + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]))
-        return [
-            [(a[1][1]*a[2][2]-a[1][2]*a[2][1])/det, -(a[0][1]*a[2][2]-a[0][2]*a[2][1])/det,  (a[0][1]*a[1][2]-a[0][2]*a[1][1])/det],
-            [-(a[1][0]*a[2][2]-a[1][2]*a[2][0])/det,  (a[0][0]*a[2][2]-a[0][2]*a[2][0])/det, -(a[0][0]*a[1][2]-a[0][2]*a[1][0])/det],
-            [(a[1][0]*a[2][1]-a[1][1]*a[2][0])/det, -(a[0][0]*a[2][1]-a[0][1]*a[2][0])/det,  (a[0][0]*a[1][1]-a[0][1]*a[1][0])/det],
-        ]
-
-    X = [[1.0, t[0], t[1]] for t in triples]
-    y = [[t[2]] for t in triples]
-    Xt = [[X[i][j] for i in range(n)] for j in range(3)]
-    beta = mm(inv3(mm(Xt, X)), mm(Xt, y))
-    return beta[0][0], beta[1][0], beta[2][0]
-
-
-# ---------------------------------------------------------------------------
-# Post-processor: maps SQL results → computed answer
-# ---------------------------------------------------------------------------
-
-def compute_answer(task: Dict, sql_results: Dict[str, Tuple[List[str], List[tuple]]]) -> Dict:
-    """Apply deterministic computation to SQL results based on gold answer structure."""
-    gold = task["result/answer"]
-
-    # Task 1: single scalar (e.g. AVG)
-    if "average_loan_amount" in gold:
-        rows = sql_results.get("financial", ([], []))[1]
-        if rows and rows[0]:
-            return {"average_loan_amount": round(float(rows[0][0]), 2)}
-        return {"average_loan_amount": None}
-
-    # Task 2: all-time medals / GDP per capita → find country with max ratio
-    if "medal_to_gdp_ratio" in gold:
-        medals_rows = next((v[1] for k, v in sql_results.items() if k == "olympics"), [])
-        gdp_rows = next((v[1] for k, v in sql_results.items() if k == "world_development_indicators"), [])
-        medals = extract_country_map(medals_rows)
-        gdp = extract_country_map(gdp_rows)
-        pairs = join_datasets(medals, gdp)
-        if not pairs:
-            return gold
-        best = max(pairs, key=lambda t: t[0] / t[1] if t[1] else 0)
-        medals_val, gdp_val, country = best
-        return {
-            "top_country": country,
-            "total_medals": int(medals_val),
-            "gdp_per_capita": int(gdp_val),
-            "medal_to_gdp_ratio": round(medals_val / gdp_val, 6),
-        }
-
-    # Task 3: Pearson correlation (medals vs GDP)
-    if "pearson_correlation" in gold:
-        medals_rows = next((v[1] for k, v in sql_results.items() if k == "olympics"), [])
-        gdp_rows = next((v[1] for k, v in sql_results.items() if k == "world_development_indicators"), [])
-        medals = extract_country_map(medals_rows)
-        gdp = extract_country_map(gdp_rows)
-        pairs = join_datasets(medals, gdp)
-        if not pairs:
-            return gold
-        xy = [(m, g) for m, g, _ in pairs]
-        return {
-            "pearson_correlation": round(pearson(xy), 6),
-            "n_countries_included": len(xy),
-        }
-
-    # Task 4: OLS slope (gdp → medals)
-    if "regression_slope" in gold:
-        medals_rows = next((v[1] for k, v in sql_results.items() if k == "olympics"), [])
-        gdp_rows = next((v[1] for k, v in sql_results.items() if k == "world_development_indicators"), [])
-        medals = extract_country_map(medals_rows)
-        gdp = extract_country_map(gdp_rows)
-        pairs = join_datasets(medals, gdp)
-        if not pairs:
-            return gold
-        # x=gdp, y=medals
-        xy = [(g, m) for m, g, _ in pairs]
-        return {
-            "regression_slope": round(ols_slope(xy), 8),
-            "n_countries_included": len(xy),
-        }
-
-    # Task 5: OLS multiple regression (gdp + pop → medals)
-    if "beta_0_intercept" in gold:
-        medals_rows = next((v[1] for k, v in sql_results.items() if k == "olympics"), [])
-        # Expect two WDI result sets: GDP and population
-        wdi_results = [v for k, v in sql_results.items() if k == "world_development_indicators"]
-        if len(wdi_results) < 2:
-            return gold
-        gdp_rows, pop_rows = wdi_results[0][1], wdi_results[1][1]
-        medals = extract_country_map(medals_rows)
-        gdp = extract_country_map(gdp_rows)
-        pop = extract_country_map(pop_rows)
-        # Triple join: medals ∩ gdp ∩ pop
-        triples = []
-        for oly_name, m in medals.items():
-            wdi_name = normalize_country(oly_name)
-            if wdi_name and wdi_name in gdp and wdi_name in pop:
-                triples.append((gdp[wdi_name], pop[wdi_name], m))
-        if not triples:
-            return gold
-        b0, b1, b2 = ols_multi(triples)
-        return {
-            "beta_0_intercept": round(b0, 10),
-            "beta_1_gdp_per_capita": round(b1, 10),
-            "beta_2_population": round(b2, 10),
-            "n_countries_included": len(triples),
-        }
-
-    return {}
-
-
-# ---------------------------------------------------------------------------
-# Evaluation
-# ---------------------------------------------------------------------------
-
-def compare_values(got: Any, expected: Any, key: str = "") -> Tuple[bool, str]:
-    if isinstance(expected, dict) and isinstance(got, dict):
-        failures = []
-        for k, exp_v in expected.items():
-            if k not in got:
-                failures.append(f"missing key '{k}'")
-                continue
-            ok, msg = compare_values(got[k], exp_v, key=k)
-            if not ok:
-                failures.append(msg)
-        return (True, "") if not failures else (False, "; ".join(failures))
-
-    if isinstance(expected, (int, float)):
+    parts = []
+    for table in tables:
+        name, ddl = table["name"], table["sql"]
+        parts.append(ddl.strip() + ";")
         try:
-            got_f = float(got)
-        except (ValueError, TypeError):
-            return False, f"{key}: expected {expected}, got '{got}'"
-        denom = max(abs(float(expected)), 1e-9)
-        if abs(got_f - float(expected)) / denom <= 0.01:
-            return True, ""
-        return False, f"{key}: expected {expected}, got {got_f} (diff {abs(got_f - float(expected)) / denom:.2%})"
+            cur.execute(f'SELECT * FROM "{name}" LIMIT 3')
+            rows = cur.fetchall()
+            if rows:
+                cols = [d[0] for d in cur.description]
+                parts.append(f"-- Sample rows from {name}:")
+                parts.append("-- " + " | ".join(cols))
+                for row in rows:
+                    parts.append("-- " + " | ".join(str(v) for v in row))
+        except Exception:
+            pass
+        parts.append("")
 
-    if isinstance(expected, str):
-        if str(got).strip().lower() == expected.strip().lower():
-            return True, ""
-        return False, f"{key}: expected '{expected}', got '{got}'"
-
-    return (True, "") if got == expected else (False, f"{key}: expected {expected!r}, got {got!r}")
-
-
-# ---------------------------------------------------------------------------
-# Prompt builder
-# ---------------------------------------------------------------------------
-
-PROMPT_TEMPLATE = """\
-You are an expert data analyst. Given the SQLite database schemas below, write the SQL queries needed to answer the question.
-
-QUESTION:
-{question}
-
-EVIDENCE:
-{evidence}
-
-DATABASE SCHEMAS:
-{schemas_block}
-
-INSTRUCTIONS:
-- Write one SQL query per database that retrieves the data needed to answer the question.
-- Do NOT compute the final answer — just write the SQL to fetch the raw data.
-- Return ONLY a JSON object with no other text:
-
-{{
-  "sqls": [
-    {{"db_id": "<database id>", "sql": "<SQL query>"}},
-    ...
-  ]
-}}"""
+    conn.close()
+    return "\n".join(parts)
 
 
-def build_prompt(task: Dict, schemas: Dict[str, str]) -> str:
-    schemas_block = "\n\n".join(
-        f"=== {db_id} ===\n{schemas[db_id]}"
-        for db_id in task.get("domains", [])
-        if db_id in schemas
-    )
-    missing = [db for db in task.get("domains", []) if db not in schemas]
-    if missing:
-        print(f"  WARNING: schemas missing for: {missing}")
-    return PROMPT_TEMPLATE.format(
-        question=task["question"],
-        evidence=task.get("evidence", ""),
-        schemas_block=schemas_block,
-    )
+def strip_markdown(text: str) -> str:
+    text = text.strip()
+    text = re.sub(r"^```(?:json)?\s*\n?", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\n?```$", "", text)
+    return text.strip()
 
 
-# ---------------------------------------------------------------------------
-# LLM call
-# ---------------------------------------------------------------------------
-
-def call_llm(prompt: str, model: str = "claude-sonnet-4-5") -> str:
-    client = anthropic.Anthropic()
-    msg = client.messages.create(
-        model=model,
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return msg.content[0].text
-
-
-def extract_json(text: str) -> Optional[Dict]:
-    text = re.sub(r"```(?:json)?\s*", "", text).strip().rstrip("`").strip()
-    start = text.find("{")
-    if start == -1:
-        return None
-    depth = 0
-    for i, ch in enumerate(text[start:], start):
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                try:
-                    return json.loads(text[start: i + 1])
-                except json.JSONDecodeError:
-                    return None
-    return None
-
-
-# ---------------------------------------------------------------------------
-# Main runner
-# ---------------------------------------------------------------------------
-
-class BaselineRunner:
-    def __init__(self, benchmark_file: Path, schema_file: Path, database_dir: Path, model: str):
-        self.benchmark_file = benchmark_file
-        self.database_dir = database_dir
-        self.model = model
-        self.output_lines: List[str] = []
-        with open(schema_file) as f:
-            self.schemas: Dict[str, str] = json.load(f)
-
-    def log(self, text: str = ""):
-        print(text)
-        self.output_lines.append(text)
-
-    def save(self, output_file: Path):
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_file, "w") as f:
-            f.write("\n".join(self.output_lines))
-        print(f"\nOutput saved to: {output_file}")
-
-    def run_task(self, task: Dict) -> Tuple[bool, str]:
-        t_id = task.get("id", "?")
-        difficulty = task.get("difficulty", "?").upper()
-        self.log(f"\n{'=' * 70}")
-        self.log(f"Task {t_id} [{difficulty}]")
-        self.log(f"Q: {task['question']}")
-
-        # 1. Call LLM
-        prompt = build_prompt(task, self.schemas)
-        self.log("\n--- Calling LLM ---")
+def execute_sqls(db_dir: str, sqls: list) -> list:
+    results = []
+    for item in sqls:
+        db_name = item.get("db", "")
+        sql = item.get("sql", "")
+        db_path = os.path.join(db_dir, db_name, f"{db_name}.sqlite")
         try:
-            response_text = call_llm(prompt, model=self.model)
+            conn = sqlite3.connect(db_path)
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            cur.execute(sql)
+            rows = cur.fetchall()
+            cols = [d[0] for d in cur.description]
+            result_rows = [dict(zip(cols, row)) for row in rows]
+            conn.close()
+            truncated = len(result_rows) > MAX_ROWS
+            results.append({
+                "db": db_name,
+                "sql": sql,
+                "result": result_rows[:MAX_ROWS],
+                "truncated": truncated,
+                "total_rows": len(result_rows),
+            })
         except Exception as e:
-            return False, f"LLM error: {e}"
+            results.append({
+                "db": db_name,
+                "sql": sql,
+                "result": {"error": str(e)},
+                "truncated": False,
+                "total_rows": 0,
+            })
+    return results
 
-        self.log(response_text)
 
-        parsed = extract_json(response_text)
-        if not parsed or "sqls" not in parsed:
-            return False, "Could not parse SQL from response"
-
-        # 2. Execute SQL queries
-        self.log("\n--- Executing SQL ---")
-        # For tasks with multiple WDI queries, preserve order
-        sql_results: Dict[str, Any] = {}
-        wdi_results = []
-
-        for sql_item in parsed["sqls"]:
-            db_id = sql_item.get("db_id", "")
-            sql = sql_item.get("sql", "")
-            self.log(f"\nDB: {db_id}")
-            self.log(f"SQL: {sql}")
-            try:
-                cols, rows = execute_sql(self.database_dir, db_id, sql)
-                self.log(format_table(cols, rows))
-                if db_id == "world_development_indicators":
-                    wdi_results.append((cols, rows))
-                else:
-                    sql_results[db_id] = (cols, rows)
-            except Exception as e:
-                self.log(f"  ERROR: {e}")
-                return False, f"SQL execution error on {db_id}: {e}"
-
-        # Store WDI results (may be multiple for task 5)
-        if wdi_results:
-            if len(wdi_results) == 1:
-                sql_results["world_development_indicators"] = wdi_results[0]
+def score_task(answer, gold, tolerance) -> bool:
+    if isinstance(gold, dict):
+        if not isinstance(answer, dict):
+            return False
+        for key, gold_val in gold.items():
+            if key not in answer:
+                return False
+            if isinstance(tolerance, dict):
+                tol = tolerance.get(key)
+                if tol is None:
+                    return False
             else:
-                # For task 5 with 2 WDI queries, store both
-                sql_results["world_development_indicators"] = wdi_results[0]
-                sql_results["world_development_indicators_2"] = wdi_results[1]
-
-        # 3. Deterministic post-processing
-        self.log("\n--- Computing answer ---")
-        # Pass all WDI results for multi-query tasks
-        augmented = dict(sql_results)
-        if len(wdi_results) > 1:
-            # Replace single entry with list for ols_multi to use
-            augmented["world_development_indicators"] = wdi_results[0]
-            augmented["world_development_indicators_2"] = wdi_results[1]
-
+                tol = float(tolerance)
+            try:
+                if abs(float(answer[key]) - float(gold_val)) > float(tol):
+                    return False
+            except (TypeError, ValueError):
+                return False
+        return True
+    else:
+        if isinstance(tolerance, dict):
+            vals = list(tolerance.values())
+            if not vals:
+                return False
+            tol = float(vals[0])
+        else:
+            tol = float(tolerance)
         try:
-            computed = compute_answer(task, augmented)
-        except Exception as e:
-            return False, f"Post-processing error: {e}"
-
-        gold = task.get("result/answer")
-        self.log(f"Gold:     {json.dumps(gold)}")
-        self.log(f"Computed: {json.dumps(computed)}")
-
-        passed, detail = compare_values(computed, gold)
-        self.log(f"Result: {'PASS' if passed else 'FAIL'}" + (f" — {detail}" if detail else ""))
-        return passed, detail
-
-    def run(self, output_file: Path):
-        with open(self.benchmark_file) as f:
-            tasks = json.load(f)
-
-        self.log("=" * 70)
-        self.log("BASELINE LLM BENCHMARK EVALUATION")
-        self.log(f"Benchmark: {self.benchmark_file}")
-        self.log(f"Model:     {self.model}")
-        self.log(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-        self.log("=" * 70)
-
-        results = []
-        for task in tasks:
-            passed, detail = self.run_task(task)
-            results.append({"id": task.get("id"), "difficulty": task.get("difficulty"), "passed": passed, "detail": detail})
-
-        n_pass = sum(1 for r in results if r["passed"])
-        n_total = len(results)
-        self.log(f"\n{'=' * 70}")
-        self.log("SUMMARY")
-        self.log(f"{'=' * 70}")
-        for r in results:
-            icon = "PASS" if r["passed"] else "FAIL"
-            extra = f"  — {r['detail']}" if r["detail"] and not r["passed"] else ""
-            self.log(f"  Task {r['id']} [{r['difficulty'].upper():<12}] {icon}{extra}")
-        self.log(f"\nAccuracy: {n_pass}/{n_total} ({n_pass / n_total * 100:.0f}%)")
-        self.log("=" * 70)
-        self.save(output_file)
+            return abs(float(answer) - float(gold)) <= tol
+        except (TypeError, ValueError):
+            return False
 
 
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
+def build_format_hint(gold) -> str:
+    if isinstance(gold, dict):
+        return "{" + ", ".join(f'"{k}": <float>' for k in gold.keys()) + "}"
+    return "<float>"
+
+
+def build_answer_tool(gold) -> dict:
+    """Build an Anthropic tool definition whose input schema matches the gold answer shape."""
+    if isinstance(gold, dict):
+        props = {k: {"type": "number"} for k in gold.keys()}
+        required = list(gold.keys())
+    else:
+        props = {"answer": {"type": "number"}}
+        required = ["answer"]
+    return {
+        "name": "submit_answer",
+        "description": "Submit the final numeric answer.",
+        "input_schema": {"type": "object", "properties": props, "required": required},
+    }
+
+
+def build_schema_message(task: dict, db_dir: str) -> str:
+    parts = []
+    for db_id in task["db_id"]:
+        db_path = os.path.join(db_dir, db_id, f"{db_id}.sqlite")
+        parts.append(f"=== Database: {db_id} ===")
+        parts.append(get_schema(db_path))
+
+    parts.append(f"Question: {task['question']}")
+    if task.get("evidence"):
+        parts.append(f"Evidence: {task['evidence']}")
+
+    message = (
+        "You are a data analyst working with SQLite databases. Given database schemas and a question, "
+        "return the SQLite compatible SQL SELECT queries needed to answer it. "
+        "Write queries that return only aggregated or pre-joined results needed "
+        "for the final computation — never return raw individual rows. "
+        "For example, if the question asks for a correlation between two rates, "
+        "each query should return one rate per group, not one row per record. "
+        'Return ONLY a JSON array: [{"db": "<db_name>", "sql": "<SELECT ...>"}, ...]. '
+        "No explanation, no markdown." + "\n\n" + "\n".join(parts)
+    )
+    
+    return message
+
+
+def build_turn2_message(exec_results: list, format_hint: str) -> str:
+    parts = []
+    for er in exec_results:
+        entry = {"db": er["db"], "sql": er["sql"], "result": er["result"]}
+        if er.get("truncated"):
+            entry["warning"] = (
+                f"Results truncated to {MAX_ROWS} rows "
+                f"(full result had {er['total_rows']} rows). "
+                "The final answer may be approximate."
+            )
+        parts.append(entry)
+    return (
+        "You are a data analyst. Given SQL query results, compute the final numeric answer. "
+        f"Return ONLY a JSON object in exactly this format: {format_hint}. "
+        "No explanation, no markdown."
+        f"Here are the SQL execution results:\n{json.dumps(parts, indent=2)}\n\n"
+        "Using these results, compute the final answer to the question."
+    )
+
+
+def run_task(task: dict, db_dir: str, client: anthropic.Anthropic, model: str) -> tuple[dict, list]:
+    steps = []
+
+    result_entry = {
+        "id": task["id"],
+        "difficulty": task.get("difficulty", ""),
+        "db_id": task.get("db_id", []),
+        "question": task["question"],
+        "turn1_sqls": None,
+        "execution_results": None,
+        "model_answer": None,
+        "gold_answer": task["result"],
+        "correct": False,
+        "error": None,
+    }
+
+    gold = task["result"]
+    format_hint = build_format_hint(gold)
+
+    # system_prompt_turn1 = (
+    #     "You are a data analyst working with SQLite databases. Given database schemas and a question, "
+    #     "return the SQL SELECT queries needed to answer it. "
+    #     "Write queries that return only aggregated or pre-joined results needed "
+    #     "for the final computation — never return raw individual rows. "
+    #     "For example, if the question asks for a correlation between two rates, "
+    #     "each query should return one rate per group, not one row per record. "
+    #     'Return ONLY a JSON array: [{"db": "<db_name>", "sql": "<SELECT ...>"}, ...]. '
+    #     "No explanation, no markdown."
+    # )
+
+    # system_prompt_turn2 = (
+    #     "You are a data analyst. Given SQL query results, compute the final numeric answer. "
+    #     f"Return ONLY a JSON object in exactly this format: {format_hint}. "
+    #     "No explanation, no markdown."
+    # )
+    
+    messages = []
+    turn1_raw = None
+
+    # ── Turn 1 ────────────────────────────────────────────────────────────────
+    try:
+        turn1_user = build_schema_message(task, db_dir)
+        messages.append({"role": "user", "content": turn1_user})
+        # messages.append({"role": "assistant", "content": "["})  # prefill
+
+        resp1 = client.messages.create(
+            model=model,
+            max_tokens=2048,
+            temperature=0,
+            messages=messages,
+        )
+        turn1_raw = resp1.content[0].text.strip()
+        messages.append({"role": "assistant", "content": turn1_raw})
+
+        sqls = json.loads(strip_markdown(turn1_raw))
+        result_entry["turn1_sqls"] = sqls
+        steps.append({"step": "turn1", "raw": turn1_raw, "sqls": sqls, "error": None})
+
+    except json.JSONDecodeError as e:
+        result_entry["error"] = f"turn1_parse_error: {e}"
+        steps.append({"step": "turn1", "raw": turn1_raw, "sqls": None, "error": result_entry["error"]})
+        return result_entry, steps
+    except Exception as e:
+        result_entry["error"] = f"turn1_error: {e}"
+        steps.append({"step": "turn1", "raw": turn1_raw, "sqls": None, "error": result_entry["error"]})
+        return result_entry, steps
+
+    # ── SQL execution ─────────────────────────────────────────────────────────
+    try:
+        exec_results = execute_sqls(db_dir, sqls)
+        result_entry["execution_results"] = exec_results
+        log_exec = [{"db": er["db"], "sql": er["sql"], "result": er["result"][:3]} for er in exec_results]
+        steps.append({"step": "execution", "results": log_exec, "error": None})
+    except Exception as e:
+        result_entry["error"] = f"execution_error: {e}"
+        steps.append({"step": "execution", "results": None, "error": result_entry["error"]})
+        return result_entry, steps
+
+    # ── Turn 2 ────────────────────────────────────────────────────────────────
+    try:
+        turn2_user = build_turn2_message(exec_results, format_hint)
+        messages.append({"role": "user", "content": turn2_user})
+
+        answer_tool = build_answer_tool(gold)
+        resp2 = client.messages.create(
+            model=model,
+            max_tokens=1024,
+            temperature=0,
+            messages=messages,
+            tools=[answer_tool],
+            tool_choice={"type": "any"},
+        )
+
+        tool_block = next((b for b in resp2.content if b.type == "tool_use"), None)
+        if tool_block is None:
+            raise ValueError("model did not call submit_answer tool")
+
+        tool_input = tool_block.input
+        # flat float answer: unwrap {"answer": x} → x
+        if isinstance(gold, dict):
+            model_answer = tool_input
+        else:
+            model_answer = tool_input["answer"]
+
+        result_entry["model_answer"] = model_answer
+        steps.append({"step": "turn2", "tool_input": tool_input, "model_answer": model_answer, "error": None})
+
+    except Exception as e:
+        result_entry["error"] = f"turn2_error: {e}"
+        steps.append({"step": "turn2", "tool_input": None, "model_answer": None, "error": result_entry["error"]})
+        return result_entry, steps
+
+    # ── Scoring ───────────────────────────────────────────────────────────────
+    try:
+        result_entry["correct"] = score_task(model_answer, gold, task["tolerance"])
+    except Exception as e:
+        result_entry["error"] = f"scoring_error: {e}"
+
+    steps.append({
+        "step": "final",
+        "model_answer": result_entry["model_answer"],
+        "gold_answer": result_entry["gold_answer"],
+        "correct": result_entry["correct"],
+        "error": result_entry["error"],
+    })
+    return result_entry, steps
+
+
+def compute_summary(all_results: list) -> dict:
+    total = len(all_results)
+    if total == 0:
+        return {}
+
+    correct_total = sum(1 for r in all_results if r["correct"])
+
+    difficulties = {}
+    for r in all_results:
+        d = r.get("difficulty", "unknown")
+        difficulties.setdefault(d, {"total": 0, "correct": 0})
+        difficulties[d]["total"] += 1
+        if r["correct"]:
+            difficulties[d]["correct"] += 1
+
+    exec_success = sum(
+        1 for r in all_results
+        if r.get("execution_results")
+        and len(r["execution_results"]) > 0
+        and all(
+            not isinstance(er.get("result"), dict) or "error" not in er["result"]
+            for er in r["execution_results"]
+        )
+    )
+
+    truncated_count = sum(
+        1 for r in all_results
+        if any(
+            er.get("truncated")
+            for er in (r.get("execution_results") or [])
+        )
+    )
+
+    return {
+        "total": total,
+        "correct": correct_total,
+        "accuracy": round(correct_total / total, 4),
+        "execution_success": exec_success,
+        "execution_success_rate": round(exec_success / total, 4),
+        "truncated_tasks": truncated_count,
+        "truncated_rate": round(truncated_count / total, 4),
+        "by_difficulty": {
+            d: {
+                "total": v["total"],
+                "correct": v["correct"],
+                "accuracy": round(v["correct"] / v["total"], 4),
+            }
+            for d, v in sorted(difficulties.items())
+        },
+    }
+
+
+def print_summary(summary: dict) -> None:
+    total = summary.get("total", 0)
+    if total == 0:
+        print("No tasks run.")
+        return
+    correct   = summary["correct"]
+    exec_s    = summary["execution_success"]
+    truncated = summary["truncated_tasks"]
+    print(f"\n{'='*48}")
+    print(f"  Total tasks       : {total}")
+    print(f"  Overall accuracy  : {correct}/{total} ({100*summary['accuracy']:.1f}%)")
+    print(f"  Execution success : {exec_s}/{total} ({100*summary['execution_success_rate']:.1f}%)")
+    print(f"  Truncated tasks   : {truncated}/{total} ({100*summary['truncated_rate']:.1f}%)")
+    print(f"\n  By difficulty:")
+    for diff, counts in summary["by_difficulty"].items():
+        t, c = counts["total"], counts["correct"]
+        print(f"    {diff:<15} {c}/{t} ({100*counts['accuracy']:.1f}%)")
+    print(f"{'='*48}\n")
+
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Single-prompt LLM baseline: SQL generation + deterministic evaluation"
-    )
-    parser.add_argument("benchmark_json", help="Path to benchmark JSON file")
-    parser.add_argument("output_file", help="Path to output text file")
-    parser.add_argument("--schema-file", required=True, help="Path to schemas.json from dump_schemas.py")
-    parser.add_argument("--database-dir", required=True, help="Path to directory containing SQLite databases")
-    parser.add_argument("--model", default="claude-sonnet-4-5", help="Anthropic model ID (default: claude-sonnet-4-5)")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--task", default="dev/task.json")
+    parser.add_argument("--db", default="dev/databases")
+    parser.add_argument("--model", default="claude-haiku-4-5-20251001")
+    parser.add_argument("--output-dir", default=None)
+    parser.add_argument("--ids", nargs="+", type=int)
     args = parser.parse_args()
 
-    benchmark_file = Path(args.benchmark_json)
-    output_file = Path(args.output_file)
-    schema_file = Path(args.schema_file)
-    database_dir = Path(args.database_dir)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_dir = Path(args.output_dir) if args.output_dir else Path(f"data/baseline_{ts}")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    results_path = output_dir / "results.json"
+    log_path     = output_dir / "log.json"
+    summary_path = output_dir / "summary.json"
+    print(f"Output folder: {output_dir}/")
 
-    for p, name in [(benchmark_file, "benchmark JSON"), (schema_file, "schema file"), (database_dir, "database dir")]:
-        if not p.exists():
-            print(f"Error: {name} not found: {p}")
-            sys.exit(1)
+    with open(args.task) as f:
+        tasks = json.load(f)
 
-    BaselineRunner(benchmark_file, schema_file, database_dir, args.model).run(output_file)
+    tasks = [t for t in tasks if "db_id" in t]
+    if args.ids:
+        tasks = [t for t in tasks if t["id"] in args.ids]
+
+    client = anthropic.Anthropic()
+
+    all_results = []
+    task_logs   = []
+
+    for i, task in enumerate(tasks):
+        print(f"[{i+1}/{len(tasks)}] Task {task['id']} ({task.get('difficulty', '')}) ...", end=" ", flush=True)
+        try:
+            entry, steps = run_task(task, args.db, client, args.model)
+        except Exception:
+            entry = {
+                "id":                task["id"],
+                "difficulty":        task.get("difficulty", ""),
+                "db_id":             task.get("db_id", []),
+                "question":          task["question"],
+                "turn1_sqls":        None,
+                "execution_results": None,
+                "model_answer":      None,
+                "gold_answer":       task["result"],
+                "correct":           False,
+                "error":             f"unexpected_error: {traceback.format_exc()}",
+            }
+            steps = [{"step": "error", "error": entry["error"]}]
+
+        status = "CORRECT" if entry["correct"] else f"WRONG ({entry.get('error') or 'scoring mismatch'})"
+        print(status)
+
+        all_results.append(entry)
+        task_logs.append({"task_id": task["id"], "steps": steps})
+
+        # Write incrementally so partial runs are recoverable
+        with open(log_path, "w") as f:
+            json.dump(task_logs, f, indent=4)
+
+    with open(results_path, "w") as f:
+        json.dump(all_results, f, indent=4)
+
+    summary = compute_summary(all_results)
+    with open(summary_path, "w") as f:
+        json.dump(summary, f, indent=4)
+
+    print(f"Results  → {results_path}")
+    print(f"Log      → {log_path}")
+    print(f"Summary  → {summary_path}")
+    print_summary(summary)
 
 
 if __name__ == "__main__":

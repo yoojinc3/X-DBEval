@@ -143,773 +143,427 @@
     },
     {
         "id": 6,
-        "difficulty": "easy",
-        "question": "Among countries that appear as both a Formula 1 constructor nationality AND a European football league host country, rank them by total Formula 1 constructor championship points accumulated across all seasons (descending). Which country ranks first, and what is its total point tally?",
-        "evidence": "Constructor nationality is stored as an English adjective (e.g., 'British', 'Italian'); the corresponding country name in european_football_2 uses the noun form (e.g., 'England', 'Italy'). The relevant adjective-to-country mappings are: British=England, French=France, German=Germany, Italian=Italy, Dutch=Netherlands, Spanish=Spain, Swiss=Switzerland, Belgian=Belgium. Total constructor championship points are summed from the constructorStandings table across all races and all seasons.",
-        "domains": [
+        "db_id": [
             "formula_1",
             "european_football_2"
         ],
-        "SQLs": [
+        "difficulty": "moderate",
+        "question": "To examine whether a country's Formula 1 constructor competitiveness is associated with its domestic football league's scoring intensity, compute the Pearson correlation between country-level average constructor championship position and average total goals per match. Return the result as {\"r\": <float>}.",
+        "evidence": "Average constructor championship position = average of standing position across all race appearances, aggregated by constructor nationality. Lower position means better performance. Average total goals per match = average of (home_team_goal + away_team_goal) per match, aggregated by country. Only include countries present in both databases.",
+        "intermediate_sqls": [
             {
-                "db_id": "formula_1",
-                "description": "Sum total constructor championship points per nationality, restricted to nationalities that map to an EF2 country",
-                "SQL": "SELECT c.nationality, SUM(cs.points) AS total_points FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId WHERE c.nationality IN ('British','French','German','Italian','Dutch','Spanish','Swiss','Belgian') GROUP BY c.nationality ORDER BY total_points DESC"
+                "db": "formula_1",
+                "sql": "SELECT c.nationality, AVG(cs.position) AS avg_position FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality"
             },
             {
-                "db_id": "european_football_2",
-                "description": "Retrieve country names that have a league in the european_football_2 database, restricted to those that correspond to F1 constructor nationalities",
-                "SQL": "SELECT name FROM Country WHERE name IN ('England','France','Germany','Italy','Netherlands','Spain','Switzerland','Belgium')"
+                "db": "european_football_2",
+                "sql": "SELECT co.name, AVG(m.home_team_goal + m.away_team_goal) AS avg_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name"
             }
         ],
-        "analysis": "Map F1 nationality adjectives to EF2 country nouns using the adjective-to-country mapping in the evidence field. Retain only countries present in both datasets (intersection). For each qualifying country, retrieve its total constructor championship points from formula_1. Sort descending. The country with the highest total is the answer.",
-        "result/answer": {
-            "ranking": [
-                {
-                    "country": "England",
-                    "f1_nationality": "British",
-                    "total_constructor_points": 121657
-                },
-                {
-                    "country": "Italy",
-                    "f1_nationality": "Italian",
-                    "total_constructor_points": 75936
-                },
-                {
-                    "country": "Germany",
-                    "f1_nationality": "German",
-                    "total_constructor_points": 38018
-                },
-                {
-                    "country": "France",
-                    "f1_nationality": "French",
-                    "total_constructor_points": 17964
-                },
-                {
-                    "country": "Switzerland",
-                    "f1_nationality": "Swiss",
-                    "total_constructor_points": 5104
-                },
-                {
-                    "country": "Netherlands",
-                    "f1_nationality": "Dutch",
-                    "total_constructor_points": 3
-                },
-                {
-                    "country": "Spain",
-                    "f1_nationality": "Spanish",
-                    "total_constructor_points": 0
-                }
-            ],
-            "top_country": "England",
-            "top_country_total_points": 121657
+        "analysis": "Map F1 constructor nationality adjectives to country nouns (e.g., British→England, Italian→Italy). Note that some nationalities are already stored as nouns (e.g., Belgium). Join on mapped country name. For overlapping countries only, compute Pearson r between avg_position and avg_goals.",
+        "result": {
+            "r": 0.45
+        },
+        "tolerance": {
+            "r": 0.01
         }
     },
     {
         "id": 7,
-        "difficulty": "intermediate",
-        "question": "Using the ZIP code reference table from the student_club database to classify postal codes by type, identify all California schools (in california_schools) whose ZIP code is classified as 'Standard'. Among those schools that also have recorded SAT scores, which California county has the highest average SAT Critical Reading score? Report the county name and average score rounded to 2 decimal places.",
-        "evidence": "The student_club database contains a zip_code reference table with columns (zip_code INTEGER, type TEXT, city, county, state, short_state). A 'Standard' zip code means type = 'Standard'. California schools are in the schools table (california_schools) with a Zip column (TEXT, may include a 4-digit suffix like '90210-1234'; use only the first 5 digits for matching). SAT Critical Reading scores are in satscores.AvgScrRead. The join key between schools and satscores is schools.CDSCode = satscores.cds.",
-        "domains": [
+        "db_id": [
             "student_club",
             "california_schools"
         ],
-        "SQLs": [
+        "difficulty": "moderate",
+        "question": "To examine whether ZIP code infrastructure quality is associated with academic achievement, compute the Pearson correlation between county-level Standard ZIP code rate and county-level SAT high achiever rate across California counties. Return the result as {\"r\": <float>}.",
+        "evidence": "Standard ZIP code rate per county = proportion of ZIP codes in that county where type = 'Standard'. SAT high achiever rate per county = total number of students scoring 1500 or above divided by total test takers, aggregated by county. Only include counties present in both databases.",
+        "intermediate_sqls": [
             {
-                "db_id": "student_club",
-                "description": "Retrieve all ZIP codes classified as 'Standard' type from the reference table",
-                "SQL": "SELECT CAST(zip_code AS TEXT) AS zip FROM zip_code WHERE type = 'Standard'"
+                "db": "student_club",
+                "sql": "SELECT REPLACE(county, ' County', '') AS county, CAST(SUM(CASE WHEN type = 'Standard' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS standard_rate FROM zip_code WHERE state = 'California' GROUP BY county"
             },
             {
-                "db_id": "california_schools",
-                "description": "Compute average SAT Critical Reading score by county for all schools with non-null SAT scores and non-null ZIP codes",
-                "SQL": "SELECT s.County, AVG(sat.AvgScrRead) AS avg_AvgScrRead FROM schools s JOIN satscores sat ON s.CDSCode = sat.cds WHERE sat.AvgScrRead IS NOT NULL AND s.Zip IS NOT NULL GROUP BY s.County ORDER BY avg_AvgScrRead DESC"
+                "db": "california_schools",
+                "sql": "SELECT s.County, CAST(SUM(sat.NumGE1500) AS REAL) / SUM(sat.NumTstTakr) AS top_rate FROM schools s JOIN satscores sat ON s.CDSCode = sat.cds WHERE sat.NumTstTakr > 0 AND sat.NumGE1500 IS NOT NULL GROUP BY s.County"
             }
         ],
-        "analysis": "Step 1: Pull all Standard ZIP codes from student_club.zip_code. Step 2: From california_schools, join schools to satscores on CDSCode=cds where AvgScrRead is not null. Truncate each school Zip to the first 5 characters (SUBSTR(Zip,1,5)) and retain only schools whose 5-digit ZIP appears in the Standard set retrieved in Step 1. Step 3: Group the filtered schools by County, compute AVG(AvgScrRead), and return the county with the maximum average.",
-        "result/answer": {
-            "top_county": "Nevada",
-            "avg_SAT_critical_reading": 547.00
+        "analysis": "Strip ' County' suffix from zip_code county names before joining. Join on county name. For overlapping counties only, compute Pearson r between standard_rate and top_rate.",
+        "result": {
+            "r": -0.19
+        },
+        "tolerance": {
+            "r": 0.01
         }
     },
     {
         "id": 8,
-        "difficulty": "intermediate",
-        "question": "For each season from 2008 to 2015, compute (a) the total Formula 1 constructor championship points earned by British constructors in that calendar year, and (b) the average number of home-team goals per match in the English Premier League for the season starting in that year. Calculate the Pearson correlation coefficient between these two annual time series and report its value (rounded to 4 decimal places) and the two-tailed p-value (rounded to 4 decimal places). Is the correlation statistically significant at a significance level of 0.05?",
-        "evidence": "British constructors are identified by constructors.nationality = 'British' in formula_1. Constructor championship points per race are in constructorStandings.points; the race year is in races.year. The English Premier League is identified in european_football_2 by Country.name = 'England'. The season field in the Match table is formatted as 'YYYY/YYYY' (e.g., '2008/2009'); extract the 4-digit start year using SUBSTR(season,1,4). Average home team goals per match are AVG(home_team_goal). Merge the two series on the calendar year (races.year = CAST(SUBSTR(season,1,4) AS INTEGER)).",
-        "domains": [
+        "db_id": [
             "formula_1",
             "european_football_2"
         ],
-        "SQLs": [
+        "difficulty": "moderate",
+        "question": "To examine whether British constructor dominance in Formula 1 correlates with English Premier League attacking play, compute the Pearson correlation between annual total points of British constructors and average home team goals per match in the English Premier League. Return the result as {\"r\": <float>, \"p\": <float>}.",
+        "evidence": "Restrict the analysis to seasons from 2008 to 2015 inclusive. Only include years present in both databases.",
+        "intermediate_sqls": [
             {
-                "db_id": "formula_1",
-                "description": "Compute total constructor championship points earned by British constructors per year from 2008 to 2015",
-                "SQL": "SELECT r.year, SUM(cs.points) AS brit_constructor_pts FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId JOIN races r ON cs.raceId = r.raceId WHERE c.nationality = 'British' AND r.year BETWEEN 2008 AND 2015 GROUP BY r.year ORDER BY r.year"
+                "db": "formula_1",
+                "sql": "SELECT r.year, SUM(cs.points) AS brit_pts FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId JOIN races r ON cs.raceId = r.raceId WHERE c.nationality = 'British' AND r.year BETWEEN 2008 AND 2015 GROUP BY r.year"
             },
             {
-                "db_id": "european_football_2",
-                "description": "Compute average home team goals per match in the English Premier League, grouped by season start year",
-                "SQL": "SELECT CAST(SUBSTR(m.season, 1, 4) AS INTEGER) AS season_year, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN League l ON m.league_id = l.id JOIN Country ct ON l.country_id = ct.id WHERE ct.name = 'England' GROUP BY m.season ORDER BY m.season"
+                "db": "european_football_2",
+                "sql": "SELECT CAST(SUBSTR(m.season, 1, 4) AS INTEGER) AS season_year, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN League l ON m.league_id = l.id JOIN Country ct ON l.country_id = ct.id WHERE ct.name = 'England' AND CAST(SUBSTR(m.season, 1, 4) AS INTEGER) BETWEEN 2008 AND 2015 GROUP BY m.season"
             }
         ],
-        "analysis": "Execute both queries. Merge the two result sets on year = season_year. Filter the merged result to years 2008-2015 (inclusive, 8 data points). Compute the Pearson correlation coefficient (scipy.stats.pearsonr or equivalent) between brit_constructor_pts and avg_home_goals. The test is two-tailed; compare p-value to 0.05.",
-        "result/answer": {
-            "annual_data": [
-                {
-                    "year": 2008,
-                    "brit_constructor_pts": 1792.0,
-                    "avg_home_goals": 1.4
-                },
-                {
-                    "year": 2009,
-                    "brit_constructor_pts": 2589.0,
-                    "avg_home_goals": 1.6974
-                },
-                {
-                    "year": 2010,
-                    "brit_constructor_pts": 5281.0,
-                    "avg_home_goals": 1.6237
-                },
-                {
-                    "year": 2011,
-                    "brit_constructor_pts": 4958.0,
-                    "avg_home_goals": 1.5895
-                },
-                {
-                    "year": 2012,
-                    "brit_constructor_pts": 8125.0,
-                    "avg_home_goals": 1.5579
-                },
-                {
-                    "year": 2013,
-                    "brit_constructor_pts": 4409.0,
-                    "avg_home_goals": 1.5737
-                },
-                {
-                    "year": 2014,
-                    "brit_constructor_pts": 4318.0,
-                    "avg_home_goals": 1.4737
-                },
-                {
-                    "year": 2015,
-                    "brit_constructor_pts": 3762.0,
-                    "avg_home_goals": 1.4921
-                }
-            ],
-            "pearson_r": 0.2279,
-            "p_value": 0.5872,
-            "significant_at_alpha_0_05": false
+        "analysis": "Join on year. For overlapping years, compute Pearson r and two-sided p-value between brit_pts and avg_home_goals.",
+        "result": {
+            "r": 0.228,
+            "p": 0.587
+        },
+        "tolerance": {
+            "r": 0.001,
+            "p": 0.001
         }
     },
     {
         "id": 9,
-        "difficulty": "hard",
-        "question": "Compute two event-rate proportions from separate databases: (1) From the toxicology database, determine the proportion of molecules that contain at least one nitrogen atom (element = 'n') which are labeled carcinogenic (label = '+'). (2) From the thrombosis_prediction database, determine the proportion of examined patients who have any level of confirmed thrombosis (Thrombosis >= 1). Then perform a two-proportion z-test to determine whether the two rates are statistically different. Report both proportions (rounded to 4 decimal places), the z-statistic (rounded to 4 decimal places), and the two-tailed p-value. Is the difference significant at alpha = 0.05?",
-        "evidence": "In toxicology.molecule, label = '+' indicates a carcinogenic molecule, label = '-' indicates non-carcinogenic. In toxicology.atom, element = 'n' identifies a nitrogen atom; join atom to molecule on molecule_id. A molecule 'contains nitrogen' if at least one of its atoms has element = 'n'. In thrombosis_prediction.Examination, Thrombosis values are: 0 = no thrombosis, 1 = mild, 2 = moderate, 3 = severe; any value >= 1 counts as confirmed thrombosis. The two-proportion z-test uses the pooled proportion under the null hypothesis of equal rates: z = (p1 - p2) / sqrt(p_pool * (1 - p_pool) * (1/n1 + 1/n2)) where p_pool = (x1 + x2) / (n1 + n2).",
-        "domains": [
+        "db_id": [
             "toxicology",
             "thrombosis_prediction"
         ],
-        "SQLs": [
+        "difficulty": "challenging",
+        "question": "To compare carcinogenicity rates with clinical thrombosis rates, perform a two-proportion z-test between the proportion of nitrogen-containing molecules that are carcinogenic and the proportion of examined patients with confirmed thrombosis. Return the result as {\"p1\": <float>, \"p2\": <float>, \"z\": <float>}.",
+        "evidence": "p1 = proportion of molecules containing at least one nitrogen atom that are labeled carcinogenic. p2 = proportion of examined patients who have confirmed thrombosis (Thrombosis >= 1). Use a two-sided pooled two-proportion z-test.",
+        "intermediate_sqls": [
             {
-                "db_id": "toxicology",
-                "description": "For each molecule, flag whether it contains at least one nitrogen atom and record its carcinogenicity label",
-                "SQL": "SELECT m.molecule_id, m.label, MAX(CASE WHEN a.element = 'n' THEN 1 ELSE 0 END) AS has_nitrogen FROM molecule m JOIN atom a ON m.molecule_id = a.molecule_id GROUP BY m.molecule_id, m.label"
+                "db": "toxicology",
+                "sql": "SELECT m.label, MAX(CASE WHEN a.element = 'n' THEN 1 ELSE 0 END) AS has_nitrogen FROM molecule m JOIN atom a ON m.molecule_id = a.molecule_id GROUP BY m.molecule_id, m.label"
             },
             {
-                "db_id": "thrombosis_prediction",
-                "description": "Count patients by thrombosis level to compute the proportion with confirmed thrombosis",
-                "SQL": "SELECT Thrombosis, COUNT(*) AS cnt FROM Examination WHERE Thrombosis IS NOT NULL GROUP BY Thrombosis"
+                "db": "thrombosis_prediction",
+                "sql": "SELECT Thrombosis, COUNT(*) AS cnt FROM Examination WHERE Thrombosis IS NOT NULL GROUP BY Thrombosis"
             }
         ],
-        "analysis": "Step 1 (toxicology): Filter the result of SQL-1 to rows where has_nitrogen = 1. Set x1 = count of rows where label = '+', n1 = total rows. Compute p1 = x1 / n1. Step 2 (thrombosis): From SQL-2 results, set x2 = sum of cnt where Thrombosis >= 1, n2 = total count of all rows. Compute p2 = x2 / n2. Step 3: Compute pooled proportion p_pool = (x1 + x2) / (n1 + n2). Compute z = (p1 - p2) / sqrt(p_pool * (1 - p_pool) * (1/n1 + 1/n2)). Compute two-tailed p-value = 2 * (1 - Phi(|z|)) where Phi is the standard normal CDF.",
-        "result/answer": {
-            "toxicology_nitrogen_molecules": 187,
-            "toxicology_carcinogenic_among_nitrogen": 81,
-            "p1_carcinogenic_rate": 0.4332,
-            "thrombosis_patients_examined": 806,
-            "thrombosis_confirmed_patients": 80,
-            "p2_thrombosis_rate": 0.0993,
-            "z_statistic": 11.161,
-            "p_value": 0.0,
-            "significant_at_alpha_0_05": true
+        "analysis": "Step 1: Filter nitrogen-containing molecules (has_nitrogen=1). Compute p1 = count(label='+') / total. Step 2: Compute p2 = sum(cnt where Thrombosis>=1) / sum(all cnt). Step 3: Pooled two-proportion z-test.",
+        "result": {
+            "p1": 0.433,
+            "p2": 0.099,
+            "z": 11.16
+        },
+        "tolerance": {
+            "p1": 0.001,
+            "p2": 0.001,
+            "z": 0.01
         }
     },
     {
         "id": 10,
-        "difficulty": "hard",
-        "question": "Restrict attention to countries that appear as both a Formula 1 constructor nationality AND a European football league host country (use the same mapping as task 1). For each qualifying country, collect all individual match-level total goals (home_team_goal + away_team_goal) from its football league in european_football_2. Perform a one-way ANOVA test across all qualifying countries to determine whether mean total goals per match differ significantly across countries. Report: (a) the country with the highest average total goals per match and its average value rounded to 4 decimal places, (b) the F-statistic rounded to 4 decimal places, and (c) whether the ANOVA result is statistically significant at alpha = 0.05.",
-        "evidence": "Use the nationality-to-country mapping from task 1: British=England, French=France, German=Germany, Italian=Italy, Dutch=Netherlands, Spanish=Spain, Swiss=Switzerland, Belgian=Belgium. Qualifying countries are those with at least one constructor in formula_1 AND a league entry in european_football_2. Total goals per match = home_team_goal + away_team_goal from the Match table. Each match provides one data point per country group. One-way ANOVA tests the null hypothesis that all country groups have the same mean total goals (scipy.stats.f_oneway or equivalent). The F-statistic follows an F-distribution with (k-1, N-k) degrees of freedom where k = number of countries and N = total matches.",
-        "domains": [
+        "db_id": [
             "formula_1",
             "european_football_2"
         ],
-        "SQLs": [
+        "difficulty": "challenging",
+        "question": "To examine whether a country's Formula 1 constructor winning tendency is associated with its domestic football league's scoring intensity, compute the Spearman correlation between country-level constructor win rate and average total goals per match. Return the result as {\"spearman_r\": <float>}.",
+        "evidence": "Constructor win rate = total wins divided by total race appearances, aggregated by constructor nationality. Average total goals per match = average of (home_team_goal + away_team_goal), aggregated by country. Only include countries that have at least one recorded constructor win. Only include countries present in both databases.",
+        "intermediate_sqls": [
             {
-                "db_id": "formula_1",
-                "description": "Retrieve distinct constructor nationalities that map to an EF2 country, to define the qualifying country set",
-                "SQL": "SELECT DISTINCT nationality FROM constructors WHERE nationality IN ('British','French','German','Italian','Dutch','Spanish','Swiss','Belgian')"
+                "db": "formula_1",
+                "sql": "SELECT c.nationality, CAST(SUM(cs.wins) AS REAL) / COUNT(*) AS win_rate FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality"
             },
             {
-                "db_id": "european_football_2",
-                "description": "For each qualifying country, retrieve all individual match-level total goals",
-                "SQL": "SELECT ct.name AS country, (m.home_team_goal + m.away_team_goal) AS total_goals FROM Match m JOIN League l ON m.league_id = l.id JOIN Country ct ON l.country_id = ct.id WHERE ct.name IN ('England','France','Germany','Italy','Netherlands','Spain','Switzerland','Belgium')"
+                "db": "european_football_2",
+                "sql": "SELECT co.name, AVG(m.home_team_goal + m.away_team_goal) AS avg_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name"
             }
         ],
-        "analysis": "Step 1: Determine qualifying countries by intersecting F1 constructor nationalities (mapped to country nouns) with EF2 Country.name. Step 2: Use SQL-2 result to group match-level total_goals by country into separate arrays (one per country). Step 3: Run one-way ANOVA (scipy.stats.f_oneway(*groups)). Step 4: Identify the country with the highest mean total goals across all its matches.",
-        "result/answer": {
-            "qualifying_countries": [
-                "England",
-                "France",
-                "Germany",
-                "Italy",
-                "Netherlands",
-                "Spain",
-                "Switzerland"
-            ],
-            "avg_goals_per_country": [
-                {
-                    "country": "Netherlands",
-                    "avg_total_goals": 3.0809,
-                    "n_matches": 2448
-                },
-                {
-                    "country": "Switzerland",
-                    "avg_total_goals": 2.9297,
-                    "n_matches": 1422
-                },
-                {
-                    "country": "Germany",
-                    "avg_total_goals": 2.9016,
-                    "n_matches": 2448
-                },
-                {
-                    "country": "Spain",
-                    "avg_total_goals": 2.7671,
-                    "n_matches": 3040
-                },
-                {
-                    "country": "England",
-                    "avg_total_goals": 2.7105,
-                    "n_matches": 3040
-                },
-                {
-                    "country": "Italy",
-                    "avg_total_goals": 2.6168,
-                    "n_matches": 3017
-                },
-                {
-                    "country": "France",
-                    "avg_total_goals": 2.4431,
-                    "n_matches": 3040
-                }
-            ],
-            "top_country": "Netherlands",
-            "top_country_avg_goals": 3.0809,
-            "f_statistic": 42.3487,
-            "p_value": 0.0,
-            "significant_at_alpha_0_05": true
+        "analysis": "Map F1 constructor nationality adjectives to country nouns. Filter to countries with win_rate > 0. Join on country name. For overlapping countries only, compute Spearman r between win_rate and avg_goals.",
+        "result": {
+            "spearman_r": 0.8
+        },
+        "tolerance": {
+            "spearman_r": 0.05
         }
     },
     {
         "id": 11,
-        "difficulty": "easy",
-        "question": "What is the average loan amount in the financial database, and how does it compare to the average transaction price at Czech vs. Slovak gas stations in the debit_card_specializing database? Return all three averages rounded to 2 decimals.",
-        "evidence": "The financial database contains a loan table with an 'amount' column representing loan amounts in Czech koruna. The debit_card_specializing database contains transactions_1k (with Price) and gasstations (with GasStationID and Country). Gas stations are located in two countries: 'CZE' (Czech Republic) and 'SVK' (Slovakia). Join transactions_1k to gasstations on GasStationID to associate each transaction with a country.",
-        "domains": [
-            "financial",
-            "debit_card_specializing"
+        "db_id": [
+            "formula_1",
+            "european_football_2"
         ],
-        "SQLs": [
+        "difficulty": "moderate",
+        "question": "To examine whether a country's geographic position is associated with its domestic football league's defensive play, compute the Pearson correlation between a country's average F1 circuit latitude and its average goals conceded per match as the away team. Return the result as {\"r\": <float>}.",
+        "evidence": "Average circuit latitude = mean of lat across all circuits in that country. Average away goals conceded = mean of away_team_goal per match, aggregated by country. Only include countries present in both databases.",
+        "intermediate_sqls": [
             {
-                "db_id": "financial",
-                "description": "Compute the average loan amount across all loans",
-                "SQL": "SELECT ROUND(AVG(amount), 2) FROM loan"
+                "db": "formula_1",
+                "sql": "SELECT ci.country, AVG(ci.lat) AS avg_lat FROM circuits ci WHERE ci.lat IS NOT NULL GROUP BY ci.country"
             },
             {
-                "db_id": "debit_card_specializing",
-                "description": "Compute the average transaction price grouped by gas station country",
-                "SQL": "SELECT g.Country, ROUND(AVG(t.Price), 2) AS avg_price FROM transactions_1k t JOIN gasstations g ON t.GasStationID = g.GasStationID GROUP BY g.Country"
+                "db": "european_football_2",
+                "sql": "SELECT co.name, AVG(m.away_team_goal) AS avg_away_goals FROM Match m JOIN Country co ON m.country_id = co.id WHERE m.away_team_goal IS NOT NULL GROUP BY co.name"
             }
         ],
-        "analysis": "Execute both queries independently. The financial query returns a single scalar (average loan amount). The debit_card query returns two rows, one per country (CZE and SVK). Present all three values side by side for comparison.",
-        "result/answer": {
-            "avg_loan_amount_financial": 151410.18,
-            "avg_transaction_price_CZE": 453.15,
-            "avg_transaction_price_SVK": 41.60
+        "analysis": "Join on exact country name (circuits.country = Country.name). For overlapping countries only, compute Pearson r between avg_lat and avg_away_goals.",
+        "result": {
+            "r": 0.61
+        },
+        "tolerance": {
+            "r": 0.01
         }
     },
     {
         "id": 12,
-        "difficulty": "intermediate",
-        "question": "Which countries host both Formula 1 races and European football league matches? For each such country, return the total number of F1 races and the total number of football matches.",
-        "evidence": "F1 race locations are determined by joining races to circuits on circuitId; the country is stored in circuits.country. European football match countries are determined by joining Match to Country on country_id via League; the country name is in Country.name. Country names must match exactly between circuits.country and Country.name for the intersection to work (e.g., both use 'Belgium', 'France', etc.).",
-        "domains": [
-            "formula_1",
-            "european_football_2"
+        "db_id": [
+            "financial",
+            "thrombosis_prediction"
         ],
-        "SQLs": [
+        "difficulty": "challenging",
+        "question": "To compare adverse outcome rates across two independent clinical and financial domains, perform a two-proportion z-test between the delinquency rate among active loans and the thrombosis rate among hospitalized patients. Return the result as {\"p1\": <float>, \"p2\": <float>, \"z\": <float>}.",
+        "evidence": "p1 = proportion of currently active loans (status = 'C' or 'D') that are in delinquency (status = 'D'). p2 = proportion of hospitalized patients (Admission = '+') who have confirmed thrombosis (Thrombosis >= 1). Use a two-sided pooled two-proportion z-test.",
+        "intermediate_sqls": [
             {
-                "db_id": "formula_1",
-                "description": "Count total F1 races per circuit country",
-                "SQL": "SELECT ci.country, COUNT(*) AS race_count FROM races r JOIN circuits ci ON r.circuitId = ci.circuitId GROUP BY ci.country ORDER BY ci.country"
+                "db": "financial",
+                "sql": "SELECT status, COUNT(*) AS cnt FROM loan WHERE status IN ('C', 'D') GROUP BY status"
             },
             {
-                "db_id": "european_football_2",
-                "description": "Count total football matches per country",
-                "SQL": "SELECT co.name AS country, COUNT(*) AS match_count FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name ORDER BY co.name"
+                "db": "thrombosis_prediction",
+                "sql": "SELECT e.Thrombosis, COUNT(*) AS cnt FROM Examination e JOIN Patient p ON e.ID = p.ID WHERE p.Admission = '+' AND e.Thrombosis IS NOT NULL GROUP BY e.Thrombosis"
             }
         ],
-        "analysis": "Execute both queries. Compute the intersection of country names from both result sets. For each country in the intersection, report the race_count from formula_1 and the match_count from european_football_2. Sort alphabetically by country.",
-        "result/answer": {
-            "countries": [
-                {
-                    "country": "Belgium",
-                    "f1_races": 62,
-                    "football_matches": 1728
-                },
-                {
-                    "country": "France",
-                    "f1_races": 59,
-                    "football_matches": 3040
-                },
-                {
-                    "country": "Germany",
-                    "f1_races": 76,
-                    "football_matches": 2448
-                },
-                {
-                    "country": "Italy",
-                    "f1_races": 95,
-                    "football_matches": 3017
-                },
-                {
-                    "country": "Netherlands",
-                    "f1_races": 30,
-                    "football_matches": 2448
-                },
-                {
-                    "country": "Portugal",
-                    "f1_races": 16,
-                    "football_matches": 2052
-                },
-                {
-                    "country": "Spain",
-                    "f1_races": 54,
-                    "football_matches": 3040
-                },
-                {
-                    "country": "Switzerland",
-                    "f1_races": 5,
-                    "football_matches": 1422
-                }
-            ]
+        "analysis": "Step 1: x1 = count(status='D'), n1 = total count(status IN ('C','D')). Compute p1 = x1/n1. Step 2: x2 = sum(cnt where Thrombosis >= 1), n2 = sum(all cnt). Compute p2 = x2/n2. Step 3: Pooled two-proportion z-test.",
+        "result": {
+            "p1": 0.100,
+            "p2": 0.233,
+            "z": -2.26
+        },
+        "tolerance": {
+            "p1": 0.001,
+            "p2": 0.001,
+            "z": 0.01
         }
     },
     {
         "id": 13,
-        "difficulty": "intermediate",
-        "question": "What is the average number of transactions per account in the financial database, and the average number of laboratory tests per patient in the thrombosis_prediction database? Return both values rounded to 2 decimals and compute how many times larger the first is than the second.",
-        "evidence": "In the financial database, each row in the trans table represents one transaction; account_id identifies the account. Compute AVG = COUNT(*) / COUNT(DISTINCT account_id). In thrombosis_prediction, each row in the Laboratory table represents one lab test; the ID column identifies the patient. Compute AVG = COUNT(*) / COUNT(DISTINCT ID). The ratio is the first average divided by the second, rounded to 2 decimals.",
-        "domains": [
-            "financial",
-            "thrombosis_prediction"
+        "db_id": [
+            "formula_1",
+            "european_football_2"
         ],
-        "SQLs": [
+        "difficulty": "moderate",
+        "question": "To examine whether a country's Formula 1 constructor dominance is associated with its domestic football league's home advantage, compute the Pearson correlation between country-level total constructor championship points and average home team goals per match. Return the result as {\"r\": <float>}.",
+        "evidence": "Total constructor championship points = sum of all points from constructorStandings, aggregated by constructor nationality. Average home team goals per match = mean of home_team_goal, aggregated by country. Only include countries present in both databases.",
+        "intermediate_sqls": [
             {
-                "db_id": "financial",
-                "description": "Compute average number of transactions per account",
-                "SQL": "SELECT ROUND(1.0 * COUNT(*) / COUNT(DISTINCT account_id), 2) FROM trans"
+                "db": "formula_1",
+                "sql": "SELECT c.nationality, SUM(cs.points) AS total_points FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality"
             },
             {
-                "db_id": "thrombosis_prediction",
-                "description": "Compute average number of laboratory tests per patient",
-                "SQL": "SELECT ROUND(1.0 * COUNT(*) / COUNT(DISTINCT ID), 2) FROM Laboratory"
+                "db": "european_football_2",
+                "sql": "SELECT co.name, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name"
             }
         ],
-        "analysis": "Execute both queries independently. Each returns a single scalar. Divide the financial average by the thrombosis average to compute the ratio. Round all values to 2 decimal places.",
-        "result/answer": {
-            "avg_transactions_per_account": 234.74,
-            "avg_lab_tests_per_patient": 46.05,
-            "ratio": 5.10
+        "analysis": "Map F1 constructor nationality adjectives to country nouns (e.g., British→England, Italian→Italy). Note Belgium is stored as a noun in the F1 DB. Join on mapped country name. For overlapping countries only, compute Pearson r between total_points and avg_home_goals.",
+        "result": {
+            "r": -0.41
+        },
+        "tolerance": {
+            "r": 0.01
         }
     },
     {
         "id": 14,
-        "difficulty": "intermediate",
-        "question": "What percentage of molecules in the toxicology database are carcinogenic (label = '+'), and what percentage of examined patients in the thrombosis_prediction database have a positive thrombosis diagnosis (Thrombosis >= 1)? Return both percentages rounded to 4 decimals and compute the absolute difference between them.",
-        "evidence": "In toxicology.molecule, label = '+' means carcinogenic, label = '-' means non-carcinogenic. The carcinogenic rate = 100 * COUNT(label='+') / COUNT(*). In thrombosis_prediction.Examination, Thrombosis = 0 means no thrombosis; values >= 1 (1, 2, 3) indicate confirmed thrombosis at increasing severity. The thrombosis rate = 100 * COUNT(Thrombosis>=1) / COUNT(*).",
-        "domains": [
-            "toxicology",
-            "thrombosis_prediction"
+        "db_id": [
+            "olympics",
+            "world_development_indicators"
         ],
-        "SQLs": [
+        "difficulty": "challenging",
+        "question": "To examine whether national economic wealth is associated with Olympic success, compute the Pearson correlation between countries' GDP per capita and their total medal count at the 2008 Summer Olympics. Return the result as {\"r\": <float>}.",
+        "evidence": "GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2008. Medal counts include Gold, Silver, and Bronze only. Apply the following country name mappings from the olympics database to world_development_indicators: USA→United States, UK→United Kingdom, Russia→Russian Federation, South Korea→Korea, Rep., Iran→Iran, Islamic Rep., Egypt→Egypt, Arab Rep., Venezuela→Venezuela, RB, Kyrgyzstan→Kyrgyz Republic, Slovakia→Slovak Republic, Bahamas→Bahamas, The, Ivory Coast→Cote d'Ivoire. Exclude historical or dissolved nations with no WDI entry: Soviet Union, East Germany, West Germany, Unified Team, Yugoslavia, Czechoslovakia, Serbia and Montenegro, Taiwan, North Korea, Individual Olympic Athletes, Australasia. Only include countries present in both databases.",
+        "intermediate_sqls": [
             {
-                "db_id": "toxicology",
-                "description": "Compute percentage of carcinogenic molecules",
-                "SQL": "SELECT ROUND(100.0 * SUM(CASE WHEN label = '+' THEN 1 ELSE 0 END) / COUNT(*), 4) FROM molecule"
+                "db": "olympics",
+                "sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2008 AND g.season = 'Summer' GROUP BY nr.region_name"
             },
             {
-                "db_id": "thrombosis_prediction",
-                "description": "Compute percentage of examined patients with confirmed thrombosis",
-                "SQL": "SELECT ROUND(100.0 * SUM(CASE WHEN Thrombosis >= 1 THEN 1 ELSE 0 END) / COUNT(*), 4) FROM Examination"
+                "db": "world_development_indicators",
+                "sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2008"
             }
         ],
-        "analysis": "Execute both queries independently. Each returns a single percentage value. Compute the absolute difference: |carcinogenic_rate - thrombosis_rate|. Round all values to 4 decimal places.",
-        "result/answer": {
-            "carcinogenic_rate_pct": 44.3149,
-            "thrombosis_rate_pct": 9.9256,
-            "absolute_difference_pct": 34.3893
+        "analysis": "Apply country name mapping. Exclude dissolved nations. Join on country name. For overlapping countries, compute Pearson r between gdp_per_capita and total_medals.",
+        "result": {
+            "r": 0.26
+        },
+        "tolerance": {
+            "r": 0.01
         }
     },
     {
         "id": 15,
-        "difficulty": "hard",
-        "question": "Across three databases: (a) find the top 3 districts by total loan amount in the financial database, (b) find the top 3 constructors by total race wins in the formula_1 database, and (c) find the top 3 publishers by number of superheroes in the superhero database. Return all nine results as a unified ranking table with columns: source_database, entity_name, and metric_value.",
-        "evidence": "In the financial database, district names are in district.A2. Join loan -> account (on account_id) -> district (on district_id) to associate loans with districts. Sum loan.amount per district. In formula_1, join constructorStandings to constructors on constructorId. Sum constructorStandings.wins per constructor name. In the superhero database, join superhero to publisher on publisher_id = id. Count superheroes per publisher_name. Each sub-query returns its top 3 sorted descending by the metric. The final result is a UNION ALL of all three.",
-        "domains": [
-            "financial",
-            "formula_1",
-            "superhero"
+        "db_id": [
+            "olympics",
+            "world_development_indicators"
         ],
-        "SQLs": [
+        "difficulty": "challenging",
+        "question": "To examine how national economic wealth predicts Olympic success, compute the slope of the simple linear regression predicting total medal count from GDP per capita for the 2012 Summer Olympics. Return the result as {\"slope\": <float>}.",
+        "evidence": "GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2012. Medal counts include Gold, Silver, and Bronze only. Apply country name mappings: USA→United States, UK→United Kingdom, Russia→Russian Federation, South Korea→Korea, Rep., Iran→Iran, Islamic Rep., Egypt→Egypt, Arab Rep., Venezuela→Venezuela, RB, Kyrgyzstan→Kyrgyz Republic, Slovakia→Slovak Republic, Bahamas→Bahamas, The, Ivory Coast→Cote d'Ivoire. Exclude: Soviet Union, East Germany, West Germany, Unified Team, Yugoslavia, Czechoslovakia, Serbia and Montenegro, Taiwan, North Korea, Individual Olympic Athletes, Australasia. Only include countries present in both databases.",
+        "intermediate_sqls": [
             {
-                "db_id": "financial",
-                "description": "Top 3 districts by total loan amount",
-                "SQL": "SELECT 'financial' AS source_database, d.A2 AS entity_name, SUM(l.amount) AS metric_value FROM loan l JOIN account a ON l.account_id = a.account_id JOIN district d ON a.district_id = d.district_id GROUP BY d.A2 ORDER BY metric_value DESC LIMIT 3"
+                "db": "olympics",
+                "sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2012 AND g.season = 'Summer' GROUP BY nr.region_name"
             },
             {
-                "db_id": "formula_1",
-                "description": "Top 3 constructors by total race wins",
-                "SQL": "SELECT 'formula_1' AS source_database, c.name AS entity_name, SUM(cs.wins) AS metric_value FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.name ORDER BY metric_value DESC LIMIT 3"
-            },
-            {
-                "db_id": "superhero",
-                "description": "Top 3 publishers by number of superheroes",
-                "SQL": "SELECT 'superhero' AS source_database, p.publisher_name AS entity_name, COUNT(*) AS metric_value FROM superhero s JOIN publisher p ON s.publisher_id = p.id GROUP BY p.publisher_name ORDER BY metric_value DESC LIMIT 3"
+                "db": "world_development_indicators",
+                "sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012"
             }
         ],
-        "analysis": "Execute each of the three queries against its respective database. Each returns 3 rows with a common schema (source_database, entity_name, metric_value). Concatenate (UNION ALL) all 9 rows into a single result table. Note that metric_value represents different units across databases (currency for financial, win count for formula_1, hero count for superhero), so cross-database numeric comparison is not meaningful — the unified table is for structured presentation only.",
-        "result/answer": {
-            "unified_table": [
-                {
-                    "source_database": "financial",
-                    "entity_name": "Hl.m. Praha",
-                    "metric_value": 12932412
-                },
-                {
-                    "source_database": "financial",
-                    "entity_name": "Brno - mesto",
-                    "metric_value": 4049400
-                },
-                {
-                    "source_database": "financial",
-                    "entity_name": "Ostrava - mesto",
-                    "metric_value": 3260220
-                },
-                {
-                    "source_database": "formula_1",
-                    "entity_name": "Ferrari",
-                    "metric_value": 1725
-                },
-                {
-                    "source_database": "formula_1",
-                    "entity_name": "McLaren",
-                    "metric_value": 1595
-                },
-                {
-                    "source_database": "formula_1",
-                    "entity_name": "Williams",
-                    "metric_value": 934
-                },
-                {
-                    "source_database": "superhero",
-                    "entity_name": "Marvel Comics",
-                    "metric_value": 387
-                },
-                {
-                    "source_database": "superhero",
-                    "entity_name": "DC Comics",
-                    "metric_value": 224
-                },
-                {
-                    "source_database": "superhero",
-                    "entity_name": "NBC - Heroes",
-                    "metric_value": 19
-                }
-            ]
+        "analysis": "Apply country name mapping. Exclude dissolved nations. Join on country name. For overlapping countries, compute OLS regression slope with GDP per capita as predictor (x) and total medals as outcome (y).",
+        "result": {
+            "slope": 0.000538
+        },
+        "tolerance": {
+            "slope": 0.000001
         }
     },
     {
         "id": 16,
-        "difficulty": "easy",
-        "question": "Among countries that appear as both a Formula 1 constructor nationality AND a European football league host country, rank them by total Formula 1 constructor championship points accumulated across all seasons (descending). Which country ranks first, and what is its total point tally?",
-        "evidence": "Constructor nationality is stored as an English adjective (e.g., 'British', 'Italian'); the corresponding country name in european_football_2 uses the noun form (e.g., 'England', 'Italy'). The relevant adjective-to-country mappings are: British=England, French=France, German=Germany, Italian=Italy, Dutch=Netherlands, Spanish=Spain, Swiss=Switzerland, Belgian=Belgium. Total constructor championship points are summed from the constructorStandings table across all races and all seasons.",
-        "domains": [
-            "formula_1",
-            "european_football_2"
+        "db_id": [
+            "olympics",
+            "world_development_indicators"
         ],
-        "SQLs": [
+        "difficulty": "very_hard",
+        "question": "To model the joint effect of economic wealth and population size on Olympic performance, fit an OLS multiple linear regression predicting each country's total medal count from GDP per capita and total population for the 2012 Summer Olympics. Return the intercept and two coefficients as {\"beta_0\": <float>, \"beta_1\": <float>, \"beta_2\": <float>}.",
+        "evidence": "GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2012. Total population uses indicator code SP.POP.TOTL for year 2012. Medal counts include Gold, Silver, and Bronze only. Apply country name mappings: USA→United States, UK→United Kingdom, Russia→Russian Federation, South Korea→Korea, Rep., Iran→Iran, Islamic Rep., Egypt→Egypt, Arab Rep., Venezuela→Venezuela, RB, Kyrgyzstan→Kyrgyz Republic, Slovakia→Slovak Republic, Bahamas→Bahamas, The, Ivory Coast→Cote d'Ivoire. Exclude: Soviet Union, East Germany, West Germany, Unified Team, Yugoslavia, Czechoslovakia, Serbia and Montenegro, Taiwan, North Korea, Individual Olympic Athletes, Australasia. Only include countries present in all three datasets.",
+        "intermediate_sqls": [
             {
-                "db_id": "formula_1",
-                "description": "Sum total constructor championship points per nationality, restricted to nationalities that map to an EF2 country",
-                "SQL": "SELECT c.nationality, SUM(cs.points) AS total_points FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId WHERE c.nationality IN ('British','French','German','Italian','Dutch','Spanish','Swiss','Belgian') GROUP BY c.nationality ORDER BY total_points DESC"
+                "db": "olympics",
+                "sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2012 AND g.season = 'Summer' GROUP BY nr.region_name"
             },
             {
-                "db_id": "european_football_2",
-                "description": "Retrieve country names that have a league in the european_football_2 database, restricted to those that correspond to F1 constructor nationalities",
-                "SQL": "SELECT name FROM Country WHERE name IN ('England','France','Germany','Italy','Netherlands','Spain','Switzerland','Belgium')"
+                "db": "world_development_indicators",
+                "sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012"
+            },
+            {
+                "db": "world_development_indicators",
+                "sql": "SELECT CountryName, Value AS population FROM Indicators WHERE IndicatorCode = 'SP.POP.TOTL' AND Year = 2012"
             }
         ],
-        "analysis": "Map F1 nationality adjectives to EF2 country nouns using the adjective-to-country mapping in the evidence field. Retain only countries present in both datasets (intersection). For each qualifying country, retrieve its total constructor championship points from formula_1. Sort descending. The country with the highest total is the answer.",
-        "result/answer": {
-            "ranking": [
-                {
-                    "country": "England",
-                    "f1_nationality": "British",
-                    "total_constructor_points": 121657
-                },
-                {
-                    "country": "Italy",
-                    "f1_nationality": "Italian",
-                    "total_constructor_points": 75936
-                },
-                {
-                    "country": "Germany",
-                    "f1_nationality": "German",
-                    "total_constructor_points": 38018
-                },
-                {
-                    "country": "France",
-                    "f1_nationality": "French",
-                    "total_constructor_points": 17964
-                },
-                {
-                    "country": "Switzerland",
-                    "f1_nationality": "Swiss",
-                    "total_constructor_points": 5104
-                },
-                {
-                    "country": "Netherlands",
-                    "f1_nationality": "Dutch",
-                    "total_constructor_points": 3
-                },
-                {
-                    "country": "Spain",
-                    "f1_nationality": "Spanish",
-                    "total_constructor_points": 0
-                }
-            ],
-            "top_country": "England",
-            "top_country_total_points": 121657
+        "analysis": "Apply country name mapping. Exclude dissolved nations. Intersect all three datasets (n=81). Construct design matrix X = [1, gdp_per_capita, population] and target y = medal_count. Solve OLS normal equations β = (XᵀX)⁻¹Xᵀy to get β0, β1, β2.",
+        "result": {
+            "beta_0": 5.56,
+            "beta_1": 0.000621,
+            "beta_2": 0.000000073
+        },
+        "tolerance": {
+            "beta_0": 0.01,
+            "beta_1": 0.000001,
+            "beta_2": 0.000000001
         }
     },
     {
         "id": 17,
-        "difficulty": "intermediate",
-        "question": "Using the ZIP code reference table from the student_club database to classify postal codes by type, identify all California schools (in california_schools) whose ZIP code is classified as 'Standard'. Among those schools that also have recorded SAT scores, which California county has the highest average SAT Critical Reading score? Report the county name and average score rounded to 2 decimal places.",
-        "evidence": "The student_club database contains a zip_code reference table with columns (zip_code INTEGER, type TEXT, city, county, state, short_state). A 'Standard' zip code means type = 'Standard'. California schools are in the schools table (california_schools) with a Zip column (TEXT, may include a 4-digit suffix like '90210-1234'; use only the first 5 digits for matching). SAT Critical Reading scores are in satscores.AvgScrRead. The join key between schools and satscores is schools.CDSCode = satscores.cds.",
-        "domains": [
-            "student_club",
-            "california_schools"
+        "db_id": [
+            "chicago_crime",
+            "social_media"
         ],
-        "SQLs": [
+        "difficulty": "moderate",
+        "question": "To examine whether days with more crime activity are associated with different social media emotional tones, compute the Pearson correlation between the total crime count per weekday and the average tweet sentiment per weekday. Return the result as {\"r\": <float>}.",
+        "evidence": "Total crime count per weekday = total crimes aggregated by day of week across all dates in chicago_crime. Average tweet sentiment = mean Sentiment per weekday across all tweets in social_media. Only include weekdays present in both databases.",
+        "intermediate_sqls": [
             {
-                "db_id": "student_club",
-                "description": "Retrieve all ZIP codes classified as 'Standard' type from the reference table",
-                "SQL": "SELECT CAST(zip_code AS TEXT) AS zip FROM zip_code WHERE type = 'Standard'"
+                "db": "chicago_crime",
+                "sql": "SELECT strftime('%w', SUBSTR(date, INSTR(date,'/')+INSTR(SUBSTR(date,INSTR(date,'/')+1),'/')+1, 4) || '-' || PRINTF('%02d', CAST(SUBSTR(date, 1, INSTR(date,'/')-1) AS INT)) || '-' || PRINTF('%02d', CAST(SUBSTR(SUBSTR(date,INSTR(date,'/')+1), 1, INSTR(SUBSTR(date,INSTR(date,'/')+1),'/')-1) AS INT))) AS dow, COUNT(*) AS crime_count FROM Crime GROUP BY dow"
             },
             {
-                "db_id": "california_schools",
-                "description": "Compute average SAT Critical Reading score by county for all schools with non-null SAT scores and non-null ZIP codes",
-                "SQL": "SELECT s.County, AVG(sat.AvgScrRead) AS avg_AvgScrRead FROM schools s JOIN satscores sat ON s.CDSCode = sat.cds WHERE sat.AvgScrRead IS NOT NULL AND s.Zip IS NOT NULL GROUP BY s.County ORDER BY avg_AvgScrRead DESC"
+                "db": "social_media",
+                "sql": "SELECT Weekday, AVG(Sentiment) AS avg_sentiment FROM twitter GROUP BY Weekday"
             }
         ],
-        "analysis": "Step 1: Pull all Standard ZIP codes from student_club.zip_code. Step 2: From california_schools, join schools to satscores on CDSCode=cds where AvgScrRead is not null. Truncate each school Zip to the first 5 characters (SUBSTR(Zip,1,5)) and retain only schools whose 5-digit ZIP appears in the Standard set retrieved in Step 1. Step 3: Group the filtered schools by County, compute AVG(AvgScrRead), and return the county with the maximum average.",
-        "result/answer": {
-            "top_county": "Nevada",
-            "avg_SAT_critical_reading": 547.00
+        "analysis": "Map dow integers (0=Sunday ... 6=Saturday) to weekday names. Join on weekday name. Compute Pearson r between crime_count and avg_sentiment.",
+        "result": {
+            "r": 0.42
+        },
+        "tolerance": {
+            "r": 0.01
         }
     },
     {
         "id": 18,
-        "difficulty": "intermediate",
-        "question": "For each season from 2008 to 2015, compute (a) the total Formula 1 constructor championship points earned by British constructors in that calendar year, and (b) the average number of home-team goals per match in the English Premier League for the season starting in that year. Calculate the Pearson correlation coefficient between these two annual time series and report its value (rounded to 4 decimal places) and the two-tailed p-value (rounded to 4 decimal places). Is the correlation statistically significant at a significance level of 0.05?",
-        "evidence": "British constructors are identified by constructors.nationality = 'British' in formula_1. Constructor championship points per race are in constructorStandings.points; the race year is in races.year. The English Premier League is identified in european_football_2 by Country.name = 'England'. The season field in the Match table is formatted as 'YYYY/YYYY' (e.g., '2008/2009'); extract the 4-digit start year using SUBSTR(season,1,4). Average home team goals per match are AVG(home_team_goal). Merge the two series on the calendar year (races.year = CAST(SUBSTR(season,1,4) AS INTEGER)).",
-        "domains": [
-            "formula_1",
-            "european_football_2"
+        "db_id": [
+            "professional_basketball",
+            "world_development_indicators"
         ],
-        "SQLs": [
+        "difficulty": "challenging",
+        "question": "To examine whether wealthier countries produce more NBA talent, compute the Spearman correlation between the number of NBA players born in each country and that country's GDP per capita. Return the result as {\"spearman_r\": <float>}.",
+        "evidence": "Count distinct NBA players (lgID = 'NBA') per birth country from the players table. GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2000. Player birth country is stored as an IOC 3-letter code; map to WDI country names accordingly. Exclude dissolved or non-sovereign entities with no WDI entry. Only include countries present in both databases.",
+        "intermediate_sqls": [
             {
-                "db_id": "formula_1",
-                "description": "Compute total constructor championship points earned by British constructors per year from 2008 to 2015",
-                "SQL": "SELECT r.year, SUM(cs.points) AS brit_constructor_pts FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId JOIN races r ON cs.raceId = r.raceId WHERE c.nationality = 'British' AND r.year BETWEEN 2008 AND 2015 GROUP BY r.year ORDER BY r.year"
+                "db": "professional_basketball",
+                "sql": "SELECT p.birthCountry, COUNT(DISTINCT p.playerID) AS player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL GROUP BY p.birthCountry ORDER BY player_count DESC"
             },
             {
-                "db_id": "european_football_2",
-                "description": "Compute average home team goals per match in the English Premier League, grouped by season start year",
-                "SQL": "SELECT CAST(SUBSTR(m.season, 1, 4) AS INTEGER) AS season_year, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN League l ON m.league_id = l.id JOIN Country ct ON l.country_id = ct.id WHERE ct.name = 'England' GROUP BY m.season ORDER BY m.season"
+                "db": "world_development_indicators",
+                "sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2000"
             }
         ],
-        "analysis": "Execute both queries. Merge the two result sets on year = season_year. Filter the merged result to years 2008-2015 (inclusive, 8 data points). Compute the Pearson correlation coefficient (scipy.stats.pearsonr or equivalent) between brit_constructor_pts and avg_home_goals. The test is two-tailed; compare p-value to 0.05.",
-        "result/answer": {
-            "annual_data": [
-                {
-                    "year": 2008,
-                    "brit_constructor_pts": 1792.0,
-                    "avg_home_goals": 1.4
-                },
-                {
-                    "year": 2009,
-                    "brit_constructor_pts": 2589.0,
-                    "avg_home_goals": 1.6974
-                },
-                {
-                    "year": 2010,
-                    "brit_constructor_pts": 5281.0,
-                    "avg_home_goals": 1.6237
-                },
-                {
-                    "year": 2011,
-                    "brit_constructor_pts": 4958.0,
-                    "avg_home_goals": 1.5895
-                },
-                {
-                    "year": 2012,
-                    "brit_constructor_pts": 8125.0,
-                    "avg_home_goals": 1.5579
-                },
-                {
-                    "year": 2013,
-                    "brit_constructor_pts": 4409.0,
-                    "avg_home_goals": 1.5737
-                },
-                {
-                    "year": 2014,
-                    "brit_constructor_pts": 4318.0,
-                    "avg_home_goals": 1.4737
-                },
-                {
-                    "year": 2015,
-                    "brit_constructor_pts": 3762.0,
-                    "avg_home_goals": 1.4921
-                }
-            ],
-            "pearson_r": 0.2279,
-            "p_value": 0.5872,
-            "significant_at_alpha_0_05": false
+        "analysis": "Map IOC 3-letter codes to WDI country names. Exclude dissolved/non-sovereign entities. Join on country name. Compute Spearman r between player_count and gdp_per_capita.",
+        "result": {
+            "spearman_r": 0.05
+        },
+        "tolerance": {
+            "spearman_r": 0.01
         }
     },
     {
         "id": 19,
-        "difficulty": "hard",
-        "question": "Compute two event-rate proportions from separate databases: (1) From the toxicology database, determine the proportion of molecules that contain at least one nitrogen atom (element = 'n') which are labeled carcinogenic (label = '+'). (2) From the thrombosis_prediction database, determine the proportion of examined patients who have any level of confirmed thrombosis (Thrombosis >= 1). Then perform a two-proportion z-test to determine whether the two rates are statistically different. Report both proportions (rounded to 4 decimal places), the z-statistic (rounded to 4 decimal places), and the two-tailed p-value. Is the difference significant at alpha = 0.05?",
-        "evidence": "In toxicology.molecule, label = '+' indicates a carcinogenic molecule, label = '-' indicates non-carcinogenic. In toxicology.atom, element = 'n' identifies a nitrogen atom; join atom to molecule on molecule_id. A molecule 'contains nitrogen' if at least one of its atoms has element = 'n'. In thrombosis_prediction.Examination, Thrombosis values are: 0 = no thrombosis, 1 = mild, 2 = moderate, 3 = severe; any value >= 1 counts as confirmed thrombosis. The two-proportion z-test uses the pooled proportion under the null hypothesis of equal rates: z = (p1 - p2) / sqrt(p_pool * (1 - p_pool) * (1/n1 + 1/n2)) where p_pool = (x1 + x2) / (n1 + n2).",
-        "domains": [
-            "toxicology",
-            "thrombosis_prediction"
+        "db_id": [
+            "professional_basketball",
+            "olympics"
         ],
-        "SQLs": [
+        "difficulty": "challenging",
+        "question": "To examine whether countries that excel at basketball also perform well at the Olympics, compute the Pearson correlation between the number of NBA players born in each country and that country's total medal count at the 2000 Summer Olympics. Return the result as {\"r\": <float>}.",
+        "evidence": "Count distinct NBA players (lgID = 'NBA') per birth country. Player birth country is stored as an IOC 3-letter code. Medal counts include Gold, Silver, and Bronze only from the 2000 Summer Olympics. Exclude dissolved or non-sovereign entities. Only include countries present in both databases.",
+        "intermediate_sqls": [
             {
-                "db_id": "toxicology",
-                "description": "For each molecule, flag whether it contains at least one nitrogen atom and record its carcinogenicity label",
-                "SQL": "SELECT m.molecule_id, m.label, MAX(CASE WHEN a.element = 'n' THEN 1 ELSE 0 END) AS has_nitrogen FROM molecule m JOIN atom a ON m.molecule_id = a.molecule_id GROUP BY m.molecule_id, m.label"
+                "db": "professional_basketball",
+                "sql": "SELECT p.birthCountry, COUNT(DISTINCT p.playerID) AS player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL GROUP BY p.birthCountry ORDER BY player_count DESC"
             },
             {
-                "db_id": "thrombosis_prediction",
-                "description": "Count patients by thrombosis level to compute the proportion with confirmed thrombosis",
-                "SQL": "SELECT Thrombosis, COUNT(*) AS cnt FROM Examination WHERE Thrombosis IS NOT NULL GROUP BY Thrombosis"
+                "db": "olympics",
+                "sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2000 AND g.season = 'Summer' GROUP BY nr.region_name"
             }
         ],
-        "analysis": "Step 1 (toxicology): Filter the result of SQL-1 to rows where has_nitrogen = 1. Set x1 = count of rows where label = '+', n1 = total rows. Compute p1 = x1 / n1. Step 2 (thrombosis): From SQL-2 results, set x2 = sum of cnt where Thrombosis >= 1, n2 = total count of all rows. Compute p2 = x2 / n2. Step 3: Compute pooled proportion p_pool = (x1 + x2) / (n1 + n2). Compute z = (p1 - p2) / sqrt(p_pool * (1 - p_pool) * (1/n1 + 1/n2)). Compute two-tailed p-value = 2 * (1 - Phi(|z|)) where Phi is the standard normal CDF.",
-        "result/answer": {
-            "toxicology_nitrogen_molecules": 187,
-            "toxicology_carcinogenic_among_nitrogen": 81,
-            "p1_carcinogenic_rate": 0.4332,
-            "thrombosis_patients_examined": 806,
-            "thrombosis_confirmed_patients": 80,
-            "p2_thrombosis_rate": 0.0993,
-            "z_statistic": 11.161,
-            "p_value": 0.0,
-            "significant_at_alpha_0_05": true
+        "analysis": "Map basketball IOC 3-letter codes to olympics region names (e.g., HOL→Netherlands, NGR→Nigeria, ENG→UK). Exclude dissolved/non-sovereign entities. Join on mapped country name. Compute Pearson r between player_count and total_medals.",
+        "result": {
+            "r": 0.59
+        },
+        "tolerance": {
+            "r": 0.01
         }
     },
     {
         "id": 20,
-        "difficulty": "hard",
-        "question": "Restrict attention to countries that appear as both a Formula 1 constructor nationality AND a European football league host country (use the same mapping as task 1). For each qualifying country, collect all individual match-level total goals (home_team_goal + away_team_goal) from its football league in european_football_2. Perform a one-way ANOVA test across all qualifying countries to determine whether mean total goals per match differ significantly across countries. Report: (a) the country with the highest average total goals per match and its average value rounded to 4 decimal places, (b) the F-statistic rounded to 4 decimal places, and (c) whether the ANOVA result is statistically significant at alpha = 0.05.",
-        "evidence": "Use the nationality-to-country mapping from task 1: British=England, French=France, German=Germany, Italian=Italy, Dutch=Netherlands, Spanish=Spain, Swiss=Switzerland, Belgian=Belgium. Qualifying countries are those with at least one constructor in formula_1 AND a league entry in european_football_2. Total goals per match = home_team_goal + away_team_goal from the Match table. Each match provides one data point per country group. One-way ANOVA tests the null hypothesis that all country groups have the same mean total goals (scipy.stats.f_oneway or equivalent). The F-statistic follows an F-distribution with (k-1, N-k) degrees of freedom where k = number of countries and N = total matches.",
-        "domains": [
-            "formula_1",
-            "european_football_2"
+        "db_id": [
+            "olympics",
+            "world_development_indicators"
         ],
-        "SQLs": [
+        "difficulty": "challenging",
+        "question": "To examine whether wealthier nations win more Olympic medals, run a Welch's t-test comparing all-time Olympic medal counts between High income and Low income countries. Return the result as {\"t\": <float>, \"p\": <float>}.",
+        "evidence": "All-time medal counts include Gold, Silver, and Bronze across all Olympic Games. Income groups are from the Country table in world_development_indicators (IncomeGroup column). High income = IncomeGroup starting with 'High income'. Low income = 'Low income' or 'Lower middle income'. Exclude Upper middle income countries from both groups. Exclude dissolved or non-sovereign nations with no WDI entry. Only include countries present in both databases.",
+        "intermediate_sqls": [
             {
-                "db_id": "formula_1",
-                "description": "Retrieve distinct constructor nationalities that map to an EF2 country, to define the qualifying country set",
-                "SQL": "SELECT DISTINCT nationality FROM constructors WHERE nationality IN ('British','French','German','Italian','Dutch','Spanish','Swiss','Belgian')"
+                "db": "olympics",
+                "sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) GROUP BY nr.region_name"
             },
             {
-                "db_id": "european_football_2",
-                "description": "For each qualifying country, retrieve all individual match-level total goals",
-                "SQL": "SELECT ct.name AS country, (m.home_team_goal + m.away_team_goal) AS total_goals FROM Match m JOIN League l ON m.league_id = l.id JOIN Country ct ON l.country_id = ct.id WHERE ct.name IN ('England','France','Germany','Italy','Netherlands','Spain','Switzerland','Belgium')"
+                "db": "world_development_indicators",
+                "sql": "SELECT ShortName, IncomeGroup FROM Country WHERE IncomeGroup IS NOT NULL AND IncomeGroup != ''"
             }
         ],
-        "analysis": "Step 1: Determine qualifying countries by intersecting F1 constructor nationalities (mapped to country nouns) with EF2 Country.name. Step 2: Use SQL-2 result to group match-level total_goals by country into separate arrays (one per country). Step 3: Run one-way ANOVA (scipy.stats.f_oneway(*groups)). Step 4: Identify the country with the highest mean total goals across all its matches.",
-        "result/answer": {
-            "qualifying_countries": [
-                "England",
-                "France",
-                "Germany",
-                "Italy",
-                "Netherlands",
-                "Spain",
-                "Switzerland"
-            ],
-            "avg_goals_per_country": [
-                {
-                    "country": "Netherlands",
-                    "avg_total_goals": 3.0809,
-                    "n_matches": 2448
-                },
-                {
-                    "country": "Switzerland",
-                    "avg_total_goals": 2.9297,
-                    "n_matches": 1422
-                },
-                {
-                    "country": "Germany",
-                    "avg_total_goals": 2.9016,
-                    "n_matches": 2448
-                },
-                {
-                    "country": "Spain",
-                    "avg_total_goals": 2.7671,
-                    "n_matches": 3040
-                },
-                {
-                    "country": "England",
-                    "avg_total_goals": 2.7105,
-                    "n_matches": 3040
-                },
-                {
-                    "country": "Italy",
-                    "avg_total_goals": 2.6168,
-                    "n_matches": 3017
-                },
-                {
-                    "country": "France",
-                    "avg_total_goals": 2.4431,
-                    "n_matches": 3040
-                }
-            ],
-            "top_country": "Netherlands",
-            "top_country_avg_goals": 3.0809,
-            "f_statistic": 42.3487,
-            "p_value": 0.0,
-            "significant_at_alpha_0_05": true
+        "analysis": "Apply country name mapping (e.g., USA→United States, UK→United Kingdom). Exclude dissolved nations. Join on country name. Split into High income vs Low/Lower-middle income groups. Run two-sided Welch t-test on total_medals.",
+        "result": {
+            "t": 4.02,
+            "p": 0.0002
+        },
+        "tolerance": {
+            "t": 0.01,
+            "p": 0.0001
         }
     }
 ]

@@ -1,14 +1,5 @@
-# Local databases (large binary files, not for version control)
+data/
 databases/
 
-# Schema dump (generated from databases, regenerate with dump_schemas.py)
-schemas.json
-
-# Python
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-
-# Data directories
-dat/
+.env
+.DS_Store
