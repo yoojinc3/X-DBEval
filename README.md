@@ -1,3 +1,30 @@
+## Benchmark Runner
+
+Use `run_agent_benchmark.py` to run the agent on `dev/task.json`, compare the generated SQL against the gold SQL, score answer accuracy with the task `result` and `tolerance` fields, and save a JSON report under `cs498/runs/`.
+
+Useful arguments:
+
+- `benchmark_json`: optional task file path. Defaults to `dev/task.json`.
+- `--data-dir`: parent data directory to search for SQLite databases.
+- `--db-dir`: direct SQLite database root if you already know the exact folder.
+- `--agent-dir`: path to the sibling `cs498-dku-agent` checkout.
+- `--task-ids`: comma-separated task IDs to run, such as `3,6,17`.
+- `--limit`: run only the first N runnable tasks after filtering missing databases.
+- `-o / --output`: output filename inside `cs498/runs/`.
+- `--verbose / -v`: print agent logging.
+
+Default starting command:
+
+```bash
+python run_agent_benchmark.py --data-dir ../data --limit 2 --verbose
+```
+
+If you want to target specific tasks instead:
+
+```bash
+python run_agent_benchmark.py --data-dir ../data --task-ids 3,6 --verbose
+```
+
 ## Task Generation Pipeline
 
 ### Step 1: Idea Brainstorming from Existing BIRD Examples
