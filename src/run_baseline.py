@@ -3,11 +3,15 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
+import sys
+import tempfile
 import traceback
 from datetime import datetime
 from pathlib import Path
 
 import anthropic
+import openai
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,38 +21,56 @@ MAX_ROWS = 500
 PRICING = {
     "claude-sonnet-4-6": {"input": 3.0,  "cache_write": 3.75, "cache_read": 0.30, "output": 15.0},
     "claude-opus-4-7":   {"input": 5.0,  "cache_write": 6.25, "cache_read": 0.50, "output": 25.0},
+    "claude-haiku-4-5":  {"input": 1.0,  "cache_write": 1.25, "cache_read": 0.10, "output": 5.0},
+    "gpt-5.4":           {"input": 2.50, "cache_write": 0.0,  "cache_read": 0.25, "output": 15.0},
 }
 
 
 def get_schema(db_path: str) -> str:
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
 
-    cur.execute(
-        "SELECT name, sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL ORDER BY name"
-    )
-    tables = cur.fetchall()
+        cur.execute(
+            "SELECT name, sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL ORDER BY name"
+        )
+        tables = cur.fetchall()
 
-    parts = []
-    for table in tables:
-        name, ddl = table["name"], table["sql"]
-        parts.append(ddl.strip() + ";")
-        try:
-            cur.execute(f'SELECT * FROM "{name}" LIMIT 3')
-            rows = cur.fetchall()
-            if rows:
-                cols = [d[0] for d in cur.description]
-                parts.append(f"-- Sample rows from {name}:")
-                parts.append("-- " + " | ".join(cols))
-                for row in rows:
-                    parts.append("-- " + " | ".join(str(v) for v in row))
-        except Exception:
-            pass
-        parts.append("")
+        parts = []
+        for table in tables:
+            name, ddl = table["name"], table["sql"]
+            parts.append(ddl.strip() + ";")
+            try:
+                cur.execute(f'SELECT * FROM "{name}" LIMIT 3')
+                rows = cur.fetchall()
+                if rows:
+                    cols = [d[0] for d in cur.description]
+                    parts.append(f"-- Sample rows from {name}:")
+                    parts.append("-- " + " | ".join(cols))
+                    for row in rows:
+                        parts.append("-- " + " | ".join(str(v) for v in row))
+            except Exception:
+                pass
+            parts.append("")
 
-    conn.close()
-    return "\n".join(parts)
+        return "\n".join(parts)
+
+
+def get_db_table_names(db_dir: str) -> dict:
+    """Returns {db_name: [table_names]} without loading full schemas or sample rows."""
+    result = {}
+    for entry in os.scandir(db_dir):
+        if entry.is_dir():
+            sqlite_path = os.path.join(entry.path, f"{entry.name}.sqlite")
+            if os.path.isfile(sqlite_path):
+                try:
+                    with sqlite3.connect(sqlite_path) as conn:
+                        cur = conn.cursor()
+                        cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+                        result[entry.name] = [r[0] for r in cur.fetchall()]
+                except Exception:
+                    pass
+    return result
 
 
 def strip_markdown(text: str) -> str:
@@ -65,12 +87,53 @@ def strip_markdown(text: str) -> str:
             json.loads(m.group())
             last_valid = m.group()
         except: pass
-    if 'last_valid' in dir():
+    if 'last_valid' in locals():
         return last_valid
     s, e = text.find('['), text.rfind(']')
     if s != -1 and e != -1:
         return text[s:e+1]
     return text
+
+
+def strip_code_block(text: str) -> str:
+    """Extract code from a markdown code block, or return text as-is."""
+    text = text.strip()
+    match = re.search(r"```(?:python)?\s*\n?([\s\S]*?)\n?```", text, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+    return text
+
+
+def execute_python_code(code: str) -> dict:
+    """Write code to a temp file, execute it, parse stdout as JSON."""
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+            f.write(code)
+            tmp_path = f.name
+        proc = subprocess.run(
+            [sys.executable, tmp_path],
+            capture_output=True, text=True, timeout=30
+        )
+        if proc.returncode != 0:
+            return {"error": f"non-zero exit ({proc.returncode}): {proc.stderr.strip()}"}
+        stdout = proc.stdout.strip()
+        if not stdout:
+            return {"error": "no output from script"}
+        try:
+            return json.loads(stdout)
+        except json.JSONDecodeError as e:
+            return {"error": f"json parse failed: {e} | stdout was: {stdout[:200]}"}
+    except subprocess.TimeoutExpired:
+        return {"error": "execution timeout (30s)"}
+    except Exception as e:
+        return {"error": str(e)}
+    finally:
+        if tmp_path:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
 
 
 def execute_sqls(db_dir: str, sqls: list) -> list:
@@ -82,12 +145,15 @@ def execute_sqls(db_dir: str, sqls: list) -> list:
         try:
             conn = sqlite3.connect(db_path)
             conn.row_factory = sqlite3.Row
-            cur = conn.cursor()
-            cur.execute(sql)
-            rows = cur.fetchall()
-            cols = [d[0] for d in cur.description]
-            result_rows = [dict(zip(cols, row)) for row in rows]
-            conn.close()
+            try:
+                cur = conn.cursor()
+                cur.execute(sql)
+                rows = cur.fetchall()
+                cols = [d[0] for d in cur.description]
+                result_rows = [dict(zip(cols, row)) for row in rows]
+            finally:
+                conn.close()
+            result_rows.sort(key=str)
             truncated = len(result_rows) > MAX_ROWS
             results.append({
                 "db": db_name,
@@ -142,7 +208,8 @@ def check_intermediate_sqls(task: dict, exec_results: list, db_dir: str) -> dict
         if isinstance(gold_res, dict) and "error" in gold_res:
             details.append({"gold_sql": gold_er["sql"], "matched": False, "reason": "gold_sql_error"})
             continue
-        matched = any(results_match(gold_res, mr) for mr in model_results)
+        gold_res_truncated = gold_res[:MAX_ROWS] if isinstance(gold_res, list) else gold_res
+        matched = any(results_match(gold_res_truncated, mr) for mr in model_results)
         details.append({"gold_sql": gold_er["sql"], "matched": matched})
 
     return {
@@ -161,14 +228,6 @@ def compute_cost(usage_dict: dict, model: str) -> float:
         + usage_dict.get("output_tokens", 0)                  / 1_000_000 * prices["output"]
     )
 
-
-def _usage_to_dict(usage) -> dict:
-    return {
-        "input_tokens":                  getattr(usage, "input_tokens", 0),
-        "output_tokens":                 getattr(usage, "output_tokens", 0),
-        "cache_creation_input_tokens":   getattr(usage, "cache_creation_input_tokens", 0),
-        "cache_read_input_tokens":       getattr(usage, "cache_read_input_tokens", 0),
-    }
 
 
 def _add_usage(a: dict, b: dict) -> dict:
@@ -208,37 +267,42 @@ def score_task(answer, gold, tolerance) -> bool:
             return False
 
 
-def build_format_hint(gold) -> str:
-    if isinstance(gold, dict):
-        return "{" + ", ".join(f'"{k}": <float>' for k in gold.keys()) + "}"
-    return "<float>"
+
+def build_db_selection_message(db_table_names: dict, question: str, evidence: str) -> str:
+    db_lines = []
+    for db_name in sorted(db_table_names):
+        tables = db_table_names[db_name]
+        db_lines.append(f"- {db_name}: tables = {', '.join(tables)}")
+
+    parts = [
+        "You are a data analyst. Given a list of available databases and a question, "
+        "select only the databases needed to answer the question. "
+        'Return ONLY a JSON array of database name strings, e.g. ["db1", "db2"]. '
+        "No explanation, no markdown.",
+        "",
+        "Available databases:",
+    ] + db_lines + ["", f"Question: {question}"]
+
+    if evidence:
+        parts.append(f"Evidence: {evidence}")
+
+    return "\n".join(parts)
 
 
-def build_answer_tool(gold) -> dict:
-    """Build an Anthropic tool definition whose input schema matches the gold answer shape."""
-    if isinstance(gold, dict):
-        props = {k: {"type": "number"} for k in gold.keys()}
-        required = list(gold.keys())
-    else:
-        props = {"answer": {"type": "number"}}
-        required = ["answer"]
-    return {
-        "name": "submit_answer",
-        "description": "Submit the final numeric answer.",
-        "input_schema": {"type": "object", "properties": props, "required": required},
-    }
+def parse_db_selection(response_text: str) -> list[str]:
+    return json.loads(strip_markdown(response_text))
 
 
-def build_schema_message(task: dict, db_dir: str) -> str:
+def build_schema_message(selected_dbs: list[str], db_dir: str, question: str, evidence: str) -> str:
     parts = []
-    for db_id in task["db_id"]:
+    for db_id in selected_dbs:
         db_path = os.path.join(db_dir, db_id, f"{db_id}.sqlite")
         parts.append(f"=== Database: {db_id} ===")
         parts.append(get_schema(db_path))
 
-    parts.append(f"Question: {task['question']}")
-    if task.get("evidence"):
-        parts.append(f"Evidence: {task['evidence']}")
+    parts.append(f"Question: {question}")
+    if evidence:
+        parts.append(f"Evidence: {evidence}")
 
     message = (
         "You are a data analyst working with SQLite databases. Given database schemas and a question, "
@@ -254,7 +318,7 @@ def build_schema_message(task: dict, db_dir: str) -> str:
     return message
 
 
-def build_turn2_message(exec_results: list, format_hint: str) -> str:
+def build_turn2_message(exec_results: list, question: str, evidence: str) -> str:
     parts = []
     for er in exec_results:
         entry = {"db": er["db"], "sql": er["sql"], "result": er["result"]}
@@ -262,19 +326,50 @@ def build_turn2_message(exec_results: list, format_hint: str) -> str:
             entry["warning"] = (
                 f"Results truncated to {MAX_ROWS} rows "
                 f"(full result had {er['total_rows']} rows). "
-                "The final answer may be approximate."
+                "Statistics computed from these rows may be approximate."
             )
         parts.append(entry)
+
+    evidence_line = f"\nEvidence: {evidence}" if evidence else ""
+
     return (
-        "You are a data analyst. Given SQL query results, compute the final numeric answer. "
-        f"Return ONLY a JSON object in exactly this format: {format_hint}. "
-        "No explanation, no markdown."
-        f"Here are the SQL execution results:\n{json.dumps(parts, indent=2)}\n\n"
-        "Using these results, compute the final answer to the question."
+        "You are a data analyst. Given SQL query results, write a self-contained Python script "
+        "that computes the final numeric answer.\n\n"
+        "The script must:\n"
+        "- Import only from the standard library, scipy, numpy, and pandas\n"
+        "- Define all input data inline as Python lists or dicts (do not read any files)\n"
+        "- Compute the answer and print exactly one JSON object to stdout\n"
+        "- Produce no other output — no debug prints, no warnings\n\n"
+        f"Question: {question}{evidence_line}\n\n"
+        f"SQL execution results:\n{json.dumps(parts, indent=2)}\n\n"
+        "Write the Python script now. Output only the script, no explanation."
     )
 
 
-def run_task(task: dict, db_dir: str, client: anthropic.Anthropic, model: str) -> tuple[dict, list]:
+def call_api(client, model: str, messages: list, max_tokens: int) -> tuple[str, dict]:
+    """Call Anthropic or OpenAI and return (text, usage_dict)."""
+    if isinstance(client, anthropic.Anthropic):
+        resp = client.messages.create(model=model, max_tokens=max_tokens, messages=messages)
+        text = resp.content[0].text.strip()
+        usage = {
+            "input_tokens":                getattr(resp.usage, "input_tokens", 0),
+            "output_tokens":               getattr(resp.usage, "output_tokens", 0),
+            "cache_creation_input_tokens": getattr(resp.usage, "cache_creation_input_tokens", 0),
+            "cache_read_input_tokens":     getattr(resp.usage, "cache_read_input_tokens", 0),
+        }
+    else:
+        resp = client.chat.completions.create(model=model, max_completion_tokens=max_tokens, messages=messages)
+        text = resp.choices[0].message.content.strip()
+        usage = {
+            "input_tokens":                getattr(resp.usage, "prompt_tokens", 0),
+            "output_tokens":               getattr(resp.usage, "completion_tokens", 0),
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens":     0,
+        }
+    return text, usage
+
+
+def run_task(task: dict, db_dir: str, client, model: str, db_table_names: dict) -> tuple[dict, list]:
     steps = []
     token_usage = {"input_tokens": 0, "output_tokens": 0,
                    "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}
@@ -284,6 +379,8 @@ def run_task(task: dict, db_dir: str, client: anthropic.Anthropic, model: str) -
         "difficulty": task.get("difficulty", ""),
         "db_id": task.get("db_id", []),
         "question": task["question"],
+        "selected_dbs": None,
+        "db_selection_correct": None,
         "turn1_sqls": None,
         "execution_results": None,
         "intermediate_sqls_check": None,
@@ -296,23 +393,48 @@ def run_task(task: dict, db_dir: str, client: anthropic.Anthropic, model: str) -
     }
 
     gold = task["result"]
-    format_hint = build_format_hint(gold)
+    question = task["question"]
+    evidence = task.get("evidence", "")
 
+    turn0_raw = None
     messages = []
     turn1_raw = None
 
+    # ── Turn 0: DB selection ──────────────────────────────────────────────────
+    try:
+        turn0_msg = build_db_selection_message(db_table_names, question, evidence)
+
+        turn0_raw, usage0 = call_api(client, model, [{"role": "user", "content": turn0_msg}], 1024)
+        token_usage = _add_usage(token_usage, usage0)
+
+        selected_dbs = parse_db_selection(turn0_raw)
+        selected_dbs = list(dict.fromkeys(selected_dbs))  # deduplicate preserving order
+
+        if not selected_dbs:
+            raise ValueError("empty db selection")
+
+        unknown = [db for db in selected_dbs if db not in db_table_names]
+        if unknown:
+            raise ValueError(f"unknown databases selected: {unknown}")
+
+        result_entry["selected_dbs"] = selected_dbs
+        result_entry["db_selection_correct"] = set(selected_dbs) == set(task.get("db_id", []))
+        steps.append({"step": "turn0", "raw": turn0_raw, "selected_dbs": selected_dbs, "error": None})
+
+    except Exception as e:
+        result_entry["error"] = f"db_selection_failed: {e}"
+        result_entry["token_usage"] = token_usage
+        result_entry["cost_usd"] = compute_cost(token_usage, model)
+        steps.append({"step": "turn0", "raw": turn0_raw, "selected_dbs": None, "error": result_entry["error"]})
+        return result_entry, steps
+
     # ── Turn 1 ────────────────────────────────────────────────────────────────
     try:
-        turn1_user = build_schema_message(task, db_dir)
+        turn1_user = build_schema_message(selected_dbs, db_dir, question, evidence)
         messages.append({"role": "user", "content": turn1_user})
 
-        resp1 = client.messages.create(
-            model=model,
-            max_tokens=4096,
-            messages=messages,
-        )
-        token_usage = _add_usage(token_usage, _usage_to_dict(resp1.usage))
-        turn1_raw = resp1.content[0].text.strip()
+        turn1_raw, usage1 = call_api(client, model, messages, 4096)
+        token_usage = _add_usage(token_usage, usage1)
         messages.append({"role": "assistant", "content": turn1_raw})
 
         sqls = json.loads(strip_markdown(turn1_raw))
@@ -360,39 +482,41 @@ def run_task(task: dict, db_dir: str, client: anthropic.Anthropic, model: str) -
     except Exception as e:
         steps.append({"step": "intermediate_sql_check", "check": None, "error": str(e)})
 
-    # ── Turn 2 ────────────────────────────────────────────────────────────────
+    # ── Turn 2: generate and execute Python computation code ──────────────────
+    turn2_raw = None
     try:
-        turn2_user = build_turn2_message(exec_results, format_hint)
+        turn2_user = build_turn2_message(exec_results, question, evidence)
         messages.append({"role": "user", "content": turn2_user})
 
-        answer_tool = build_answer_tool(gold)
-        resp2 = client.messages.create(
-            model=model,
-            max_tokens=4096,
-            messages=messages,
-            tools=[answer_tool],
-            tool_choice={"type": "any"},
-        )
-        token_usage = _add_usage(token_usage, _usage_to_dict(resp2.usage))
+        turn2_raw, usage2 = call_api(client, model, messages, 4096)
+        token_usage = _add_usage(token_usage, usage2)
 
-        tool_block = next((b for b in resp2.content if b.type == "tool_use"), None)
-        if tool_block is None:
-            raise ValueError("model did not call submit_answer tool")
+        code = strip_code_block(turn2_raw)
+        steps.append({"step": "turn2_code", "code": code, "error": None})
 
-        tool_input = tool_block.input
+        exec_output = execute_python_code(code)
+        if "error" in exec_output:
+            raise ValueError(f"code execution failed: {exec_output['error']}")
+
         if isinstance(gold, dict):
-            model_answer = tool_input
+            model_answer = exec_output
         else:
-            model_answer = tool_input["answer"]
+            # scalar gold: expect {"answer": <float>} or a single-key dict
+            if "answer" in exec_output:
+                model_answer = exec_output["answer"]
+            elif len(exec_output) == 1:
+                model_answer = next(iter(exec_output.values()))
+            else:
+                model_answer = exec_output
 
         result_entry["model_answer"] = model_answer
-        steps.append({"step": "turn2", "tool_input": tool_input, "model_answer": model_answer, "error": None})
+        steps.append({"step": "turn2", "model_answer": model_answer, "error": None})
 
     except Exception as e:
         result_entry["error"] = f"turn2_error: {e}"
         result_entry["token_usage"] = token_usage
         result_entry["cost_usd"] = compute_cost(token_usage, model)
-        steps.append({"step": "turn2", "tool_input": None, "model_answer": None, "error": result_entry["error"]})
+        steps.append({"step": "turn2", "model_answer": None, "error": result_entry["error"]})
         return result_entry, steps
 
     # ── Scoring ───────────────────────────────────────────────────────────────
@@ -453,6 +577,9 @@ def compute_summary(all_results: list, model: str = "") -> dict:
     isql_tasks = [r for r in all_results if r.get("intermediate_sqls_check", {}).get("available")]
     isql_correct = sum(1 for r in isql_tasks if r["intermediate_sqls_check"].get("all_matched"))
 
+    # DB selection stats
+    db_sel_correct = sum(1 for r in all_results if r.get("db_selection_correct"))
+
     # Token usage totals
     total_usage: dict = {"input_tokens": 0, "output_tokens": 0,
                          "cache_creation_input_tokens": 0, "cache_read_input_tokens": 0}
@@ -465,6 +592,11 @@ def compute_summary(all_results: list, model: str = "") -> dict:
         "total": total,
         "correct": correct_total,
         "accuracy": round(correct_total / total, 4),
+        "db_selection": {
+            "correct": db_sel_correct,
+            "total": total,
+            "accuracy": round(db_sel_correct / total, 4),
+        },
         "execution_success": exec_success,
         "execution_success_rate": round(exec_success / total, 4),
         "truncated_tasks": truncated_count,
@@ -495,6 +627,7 @@ def print_summary(summary: dict) -> None:
     correct   = summary["correct"]
     exec_s    = summary["execution_success"]
     truncated = summary["truncated_tasks"]
+    db_sel    = summary.get("db_selection", {})
     isql      = summary.get("intermediate_sqls", {})
     usage     = summary.get("token_usage", {})
     cost      = summary.get("cost_usd")
@@ -502,6 +635,9 @@ def print_summary(summary: dict) -> None:
     print(f"\n{'='*52}")
     print(f"  Total tasks            : {total}")
     print(f"  Overall accuracy       : {correct}/{total} ({100*summary['accuracy']:.1f}%)")
+    if db_sel:
+        ds_c = db_sel["correct"]
+        print(f"  DB selection accuracy  : {ds_c}/{total} ({100*db_sel['accuracy']:.1f}%)")
     print(f"  Execution success      : {exec_s}/{total} ({100*summary['execution_success_rate']:.1f}%)")
     print(f"  Truncated tasks        : {truncated}/{total} ({100*summary['truncated_rate']:.1f}%)")
 
@@ -540,6 +676,9 @@ def main():
     parser.add_argument("--model", default="claude-haiku-4-5-20251001")
     parser.add_argument("--output-dir", default=None)
     parser.add_argument("--ids", nargs="+", type=int)
+    parser.add_argument("--start", type=int, default=None, help="Skip tasks with id < this value")
+    parser.add_argument("--summarize", action="store_true", help="Recompute summary.json from existing results.json and exit")
+    parser.add_argument("--reprice", action="store_true", help="Recompute cost_usd in results.json using current PRICING, then rewrite summary.json")
     args = parser.parse_args()
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -550,28 +689,59 @@ def main():
     summary_path = output_dir / "summary.json"
     print(f"Output folder: {output_dir}/")
 
+    if args.summarize:
+        with open(results_path) as f:
+            all_results = json.load(f)
+        summary = compute_summary(all_results, model=args.model)
+        with open(summary_path, "w") as f:
+            json.dump(summary, f, indent=4)
+        print(f"Summary  → {summary_path}")
+        print_summary(summary)
+        return
+
+    if args.reprice:
+        with open(results_path) as f:
+            all_results = json.load(f)
+        for r in all_results:
+            if r.get("token_usage"):
+                r["cost_usd"] = round(compute_cost(r["token_usage"], args.model), 6)
+        with open(results_path, "w") as f:
+            json.dump(all_results, f, indent=4)
+        summary = compute_summary(all_results, model=args.model)
+        with open(summary_path, "w") as f:
+            json.dump(summary, f, indent=4)
+        print(f"Results  → {results_path}")
+        print(f"Summary  → {summary_path}")
+        print_summary(summary)
+        return
+
     with open(args.task) as f:
         tasks = json.load(f)
 
     tasks = [t for t in tasks if "db_id" in t]
     if args.ids:
         tasks = [t for t in tasks if t["id"] in args.ids]
+    if args.start is not None:
+        tasks = [t for t in tasks if t["id"] >= args.start]
 
-    client = anthropic.Anthropic()
+    client = openai.OpenAI() if args.model.startswith("gpt-") else anthropic.Anthropic()
 
     all_results = []
     task_logs   = []
 
+    db_table_names = get_db_table_names(args.db)
     for i, task in enumerate(tasks):
         print(f"[{i+1}/{len(tasks)}] Task {task['id']} ({task.get('difficulty', '')}) ...", end=" ", flush=True)
         try:
-            entry, steps = run_task(task, args.db, client, args.model)
+            entry, steps = run_task(task, args.db, client, args.model, db_table_names)
         except Exception:
             entry = {
                 "id":                      task["id"],
                 "difficulty":              task.get("difficulty", ""),
                 "db_id":                   task.get("db_id", []),
                 "question":                task["question"],
+                "selected_dbs":            None,
+                "db_selection_correct":    None,
                 "turn1_sqls":              None,
                 "execution_results":       None,
                 "intermediate_sqls_check": None,

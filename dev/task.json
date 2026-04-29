@@ -76,16 +76,16 @@
         ],
         "analysis": "Step 1: Compute mh_rate per gender x age_group from survey. Step 2: Within each gender, compute median mh_rate across its 3 age groups. Classify each age group as high-burden (rate > median) or low-burden. Step 3: Map Male to M, Female to F. For each patient in synthea, assign high/low label based on their gender x age_group. Step 4: Run two-sided Welch t-test on total_claims within each gender separately.",
         "result": {
-            "female_t": -0.46,
-            "female_p": 0.64,
-            "male_t": -4.42,
-            "male_p": 0.0
+            "female_t": -0.4622,
+            "female_p": 0.6443,
+            "male_t": -4.4199,
+            "male_p": 0.000014
         },
         "tolerance": {
             "female_t": 0.01,
             "female_p": 0.01,
             "male_t": 0.01,
-            "male_p": 0.01
+            "male_p": 0.000005
         }
     },
     {
