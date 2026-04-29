@@ -1,0 +1,577 @@
+[
+    {
+        "id": 1,
+        "db_id": [
+            "chicago_crime",
+            "food_inspection_2"
+        ],
+        "difficulty": "simple",
+        "question": "Across all Chicago wards, compute the Pearson correlation coefficient between the ward-level food inspection failure rate and the ward-level crime arrest rate.",
+        "evidence": "Only include wards that have both food inspection and crime data.",
+        "intermediate_sqls": [
+            {
+                "db": "food_inspection_2",
+                "sql": "SELECT e.ward, CAST(SUM(CASE WHEN i.results = 'Fail' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS fail_rate FROM establishment AS e INNER JOIN inspection AS i ON e.license_no = i.license_no GROUP BY e.ward"
+            },
+            {
+                "db": "chicago_crime",
+                "sql": "SELECT ward_no, CAST(SUM(CASE WHEN arrest = 'TRUE' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS arrest_rate FROM Crime GROUP BY ward_no"
+            }
+        ],
+        "analysis": "Join the two result sets on ward. For overlapping wards only, compute the Pearson correlation coefficient between fail_rate (x) and arrest_rate (y).",
+        "result": {
+            "r": 0.518
+        },
+        "tolerance": {
+            "r": 0.05
+        }
+    },
+    {
+        "id": 2,
+        "db_id": [
+            "chicago_crime",
+            "sales_in_weather"
+        ],
+        "difficulty": "challenging",
+        "question": "To examine how harsh weather relates to domestic violence in Chicago, compute the Welch's t-statistic and p-value comparing monthly domestic violence crime rates between harsh and non-harsh months. Return the result as {\"t\": <float>, \"p\": <float>}",
+        "evidence": "A month is classified as 'harsh' if its average daily precipitation across all weather stations exceeds the 75th percentile of all monthly averages. Only include months present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "sales_in_weather",
+                "sql": "SELECT yr_month, AVG(station_avg) AS avg_precip FROM (SELECT station_nbr, SUBSTR(date, 1, 7) AS yr_month, AVG(preciptotal) AS station_avg FROM weather WHERE preciptotal IS NOT NULL GROUP BY station_nbr, SUBSTR(date, 1, 7)) GROUP BY yr_month"
+            },
+            {
+                "db": "chicago_crime",
+                "sql": "SELECT PRINTF('%04d-%02d', CAST(SUBSTR(date, INSTR(date,'/')+INSTR(SUBSTR(date,INSTR(date,'/')+1),'/') +1, 4) AS INT), CAST(SUBSTR(date, 1, INSTR(date,'/')-1) AS INT)) AS yr_month, CAST(SUM(CASE WHEN domestic = 'TRUE' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS dv_rate FROM Crime GROUP BY yr_month"
+            }
+        ],
+        "analysis": "Join the two monthly series on yr_month. Compute the 75th percentile of avg_precip. Label each month as 'harsh' (avg_precip > p75) or 'non-harsh'. Run a two-sided Welch's t-test on dv_rate between the two groups.",
+        "result": {
+            "t": 2.27,
+            "p": 0.113
+        },
+        "tolerance": {
+            "t": 0.01,
+            "p": 0.001
+        }
+    },
+    {
+        "id": 3,
+        "db_id": [
+            "synthea",
+            "mental_health_survey"
+        ],
+        "difficulty": "challenging",
+        "question": "To examine whether age groups with higher self-reported mental health burden incur greater medical costs, run a gender-stratified Welch's t-test comparing total claim amounts per patient between high-burden and low-burden age groups within each gender. Return the result as {\"female_t\": <float>, \"female_p\": <float>, \"male_t\": <float>, \"male_p\": <float>}.",
+        "evidence": "Define age groups as: 18-34, 35-49, 50-65. Only include survey respondents whose gender is exactly 'Male' or 'Female' and whose age is between 18 and 65. Mental health burden rate = proportion of respondents answering 'Yes' per gender x age group. Within each gender, classify age groups as high-burden if their rate exceeds the median rate across age groups within that gender. Use living patients only (deathdate IS NULL). Only include gender x age groups present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "mental_health_survey",
+                "sql": "SELECT a_gender.AnswerText AS gender, CASE WHEN CAST(a_age.AnswerText AS INT) BETWEEN 18 AND 34 THEN '18-34' WHEN CAST(a_age.AnswerText AS INT) BETWEEN 35 AND 49 THEN '35-49' WHEN CAST(a_age.AnswerText AS INT) BETWEEN 50 AND 65 THEN '50-65' END AS age_group, CAST(SUM(CASE WHEN a_mh.AnswerText = 'Yes' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS mh_rate FROM Answer a_mh JOIN Answer a_gender ON a_mh.UserID = a_gender.UserID AND a_mh.SurveyID = a_gender.SurveyID JOIN Answer a_age ON a_mh.UserID = a_age.UserID AND a_mh.SurveyID = a_age.SurveyID WHERE a_mh.QuestionID = 33 AND a_gender.QuestionID = 2 AND a_gender.AnswerText IN ('Male', 'Female') AND a_age.QuestionID = 1 AND CAST(a_age.AnswerText AS INT) BETWEEN 18 AND 65 GROUP BY gender, age_group"
+            },
+            {
+                "db": "synthea",
+                "sql": "SELECT p.patient, p.gender, CASE WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 18 AND 34 THEN '18-34' WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 35 AND 49 THEN '35-49' WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 50 AND 65 THEN '50-65' END AS age_group, SUM(cl.TOTAL) AS total_claims FROM patients p JOIN claims cl ON p.patient = cl.PATIENT WHERE p.deathdate IS NULL GROUP BY p.patient"
+            }
+        ],
+        "analysis": "Step 1: Compute mh_rate per gender x age_group from survey. Step 2: Within each gender, compute median mh_rate across its 3 age groups. Classify each age group as high-burden (rate > median) or low-burden. Step 3: Map Male to M, Female to F. For each patient in synthea, assign high/low label based on their gender x age_group. Step 4: Run two-sided Welch t-test on total_claims within each gender separately.",
+        "result": {
+            "female_t": -0.46,
+            "female_p": 0.64,
+            "male_t": -4.42,
+            "male_p": 0.0
+        },
+        "tolerance": {
+            "female_t": 0.01,
+            "female_p": 0.01,
+            "male_t": 0.01,
+            "male_p": 0.01
+        }
+    },
+    {
+        "id": 4,
+        "db_id": [
+            "student_loan",
+            "college_completion"
+        ],
+        "difficulty": "challenging",
+        "question": "To assess whether graduation outcomes predict post-enrollment adversity, compute the Spearman correlation between a school's 150% graduation rate and its composite adverse outcome rate. Return the result as {\"spearman_r\": <float>, \"p_value\": <float>}.",
+        "evidence": "Adverse outcome is defined as a student who is unemployed, has filed for bankruptcy, or has a payment due. School name mapping between databases: occ=Orange Coast College, smc=Santa Monica College, ucb=University of California at Berkeley, ucla=University of California at Los Angeles, ucsd=University of California at San Diego, uci=University of California at Irvine. Only include schools present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "student_loan",
+                "sql": "SELECT e.school, CAST(COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR fb.name IS NOT NULL OR np.bool = 'pos' THEN e.name END) AS REAL) / COUNT(DISTINCT e.name) AS adverse_rate FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy fb ON e.name = fb.name LEFT JOIN no_payment_due np ON e.name = np.name GROUP BY e.school"
+            },
+            {
+                "db": "college_completion",
+                "sql": "SELECT chronname, grad_150_value FROM institution_details WHERE grad_150_value IS NOT NULL"
+            }
+        ],
+        "analysis": "Map school abbreviations to full names. Join on school name. Compute Spearman r and two-sided p-value between grad_150_value and adverse_rate across overlapping schools.",
+        "result": {
+            "spearman_r": -0.06,
+            "p_value": 0.913
+        },
+        "tolerance": {
+            "spearman_r": 0.01,
+            "p_value": 0.001
+        }
+    },
+    {
+        "id": 5,
+        "db_id": [
+            "student_loan",
+            "college_completion",
+            "human_resources"
+        ],
+        "difficulty": "challenging",
+        "question": "To examine whether institutional spending relative to labor market pay predicts student financial distress, compute the Pearson correlation between each school's spending-to-labor-market ratio and its student adverse outcome rate. Return the result as {\"r\": <float>}.",
+        "evidence": "Adverse outcome is defined as a student who is unemployed, has filed for bankruptcy, or has a payment due. Spending-to-labor-market ratio = exp_award_value divided by the average maximum salary of bachelor's-level positions. School name mapping between databases: occ=Orange Coast College, smc=Santa Monica College, ucb=University of California at Berkeley, ucla=University of California at Los Angeles, ucsd=University of California at San Diego, uci=University of California at Irvine. Only include schools present in all three databases.",
+        "intermediate_sqls": [
+            {
+                "db": "student_loan",
+                "sql": "SELECT e.school, CAST(COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR fb.name IS NOT NULL OR np.bool = 'pos' THEN e.name END) AS REAL) / COUNT(DISTINCT e.name) AS adverse_rate FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy fb ON e.name = fb.name LEFT JOIN no_payment_due np ON e.name = np.name GROUP BY e.school"
+            },
+            {
+                "db": "college_completion",
+                "sql": "SELECT chronname, exp_award_value FROM institution_details WHERE exp_award_value IS NOT NULL"
+            },
+            {
+                "db": "human_resources",
+                "sql": "SELECT AVG(CAST(REPLACE(REPLACE(maxsalary, 'US$', ''), ',', '') AS REAL)) AS avg_maxsalary FROM position WHERE educationrequired = '4 year degree'"
+            }
+        ],
+        "analysis": "Step 1: Map student_loan school abbreviations to full names, compute adverse_rate per school. Step 2: Join with college_completion on school name to get exp_award_value per school. Step 3: Fetch bachelor's avg maxsalary scalar from human_resources. Step 4: Compute ratio = exp_award_value / avg_maxsalary per school. Step 5: Compute Pearson r between ratio and adverse_rate across overlapping schools.",
+        "result": {
+            "r": -0.63
+        },
+        "tolerance": {
+            "r": 0.01
+        }
+    },
+    {
+        "id": 6,
+        "db_id": [
+            "formula_1",
+            "european_football_2"
+        ],
+        "difficulty": "moderate",
+        "question": "To examine whether a country's Formula 1 constructor competitiveness is associated with its domestic football league's scoring intensity, compute the Pearson correlation between country-level average constructor championship position and average total goals per match. Return the result as {\"r\": <float>}.",
+        "evidence": "Average constructor championship position = average of standing position across all race appearances, aggregated by constructor nationality. Lower position means better performance. Average total goals per match = average of (home_team_goal + away_team_goal) per match, aggregated by country. Only include countries present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "formula_1",
+                "sql": "SELECT c.nationality, AVG(cs.position) AS avg_position FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality"
+            },
+            {
+                "db": "european_football_2",
+                "sql": "SELECT co.name, AVG(m.home_team_goal + m.away_team_goal) AS avg_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name"
+            }
+        ],
+        "analysis": "Map F1 constructor nationality adjectives to country nouns (e.g., British→England, Italian→Italy). Note that some nationalities are already stored as nouns (e.g., Belgium). Join on mapped country name. For overlapping countries only, compute Pearson r between avg_position and avg_goals.",
+        "result": {
+            "r": 0.4536
+        },
+        "tolerance": {
+            "r": 0.01
+        }
+    },
+    {
+        "id": 7,
+        "db_id": [
+            "student_club",
+            "california_schools"
+        ],
+        "difficulty": "simple",
+        "question": "To examine whether ZIP code infrastructure quality is associated with academic achievement, compute the Pearson correlation between county-level Standard ZIP code rate and county-level SAT high achiever rate across California counties. Return the result as {\"r\": <float>}.",
+        "evidence": "Standard ZIP code rate per county = proportion of ZIP codes in that county where type = 'Standard'. SAT high achiever rate per county = total number of students scoring 1500 or above divided by total test takers, aggregated by county. ZIP codes are associated with counties using the full state name (e.g., 'California', not 'CA'). Only include counties present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "student_club",
+                "sql": "SELECT REPLACE(county, ' County', '') AS county, CAST(SUM(CASE WHEN type = 'Standard' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS standard_rate FROM zip_code WHERE state = 'California' GROUP BY county"
+            },
+            {
+                "db": "california_schools",
+                "sql": "SELECT s.County, CAST(SUM(sat.NumGE1500) AS REAL) / SUM(sat.NumTstTakr) AS top_rate FROM schools s JOIN satscores sat ON s.CDSCode = sat.cds WHERE sat.NumTstTakr > 0 AND sat.NumGE1500 IS NOT NULL GROUP BY s.County"
+            }
+        ],
+        "analysis": "Strip ' County' suffix from zip_code county names before joining. Join on county name. For overlapping counties only, compute Pearson r between standard_rate and top_rate.",
+        "result": {
+            "r": -0.1903
+        },
+        "tolerance": {
+            "r": 0.01
+        }
+    },
+    {
+        "id": 8,
+        "db_id": [
+            "formula_1",
+            "european_football_2"
+        ],
+        "difficulty": "moderate",
+        "question": "To examine whether British constructor dominance in Formula 1 correlates with English Premier League attacking play, compute the Pearson correlation between annual total points of British constructors and average home team goals per match in the English Premier League. Return the result as {\"r\": <float>, \"p\": <float>}.",
+        "evidence": "Restrict the analysis to seasons from 2008 to 2015 inclusive. Only include years present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "formula_1",
+                "sql": "SELECT r.year, SUM(cs.points) AS brit_pts FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId JOIN races r ON cs.raceId = r.raceId WHERE c.nationality = 'British' AND r.year BETWEEN 2008 AND 2015 GROUP BY r.year"
+            },
+            {
+                "db": "european_football_2",
+                "sql": "SELECT CAST(SUBSTR(m.season, 1, 4) AS INTEGER) AS season_year, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN League l ON m.league_id = l.id JOIN Country ct ON l.country_id = ct.id WHERE ct.name = 'England' AND CAST(SUBSTR(m.season, 1, 4) AS INTEGER) BETWEEN 2008 AND 2015 GROUP BY m.season"
+            }
+        ],
+        "analysis": "Join on year. For overlapping years, compute Pearson r and two-sided p-value between brit_pts and avg_home_goals.",
+        "result": {
+            "r": 0.2279,
+            "p": 0.5872
+        },
+        "tolerance": {
+            "r": 0.001,
+            "p": 0.001
+        }
+    },
+    {
+        "id": 9,
+        "db_id": [
+            "toxicology",
+            "thrombosis_prediction"
+        ],
+        "difficulty": "challenging",
+        "question": "To compare carcinogenicity rates with clinical thrombosis rates, perform a two-proportion z-test between the proportion of nitrogen-containing molecules that are carcinogenic and the proportion of examined patients with confirmed thrombosis. Return the result as {\"p1\": <float>, \"p2\": <float>, \"z\": <float>}.",
+        "evidence": "p1 = proportion of molecules containing at least one nitrogen atom that are labeled carcinogenic. p2 = proportion of examined patients who have confirmed thrombosis (Thrombosis >= 1). Use a two-sided pooled two-proportion z-test.",
+        "intermediate_sqls": [
+            {
+                "db": "toxicology",
+                "sql": "SELECT SUM(CASE WHEN label = '+' THEN 1 ELSE 0 END) AS x1, COUNT(*) AS n1 FROM molecule WHERE molecule_id IN (SELECT DISTINCT molecule_id FROM atom WHERE element = 'n')"
+            },
+            {
+                "db": "thrombosis_prediction",
+                "sql": "SELECT SUM(CASE WHEN Thrombosis >= 1 THEN 1 ELSE 0 END) AS x2, COUNT(*) AS n2 FROM Examination WHERE Thrombosis IS NOT NULL"
+            }
+        ],
+        "analysis": "Step 1: Filter nitrogen-containing molecules (has_nitrogen=1). Compute p1 = count(label='+') / total. Step 2: Compute p2 = sum(cnt where Thrombosis>=1) / sum(all cnt). Step 3: Pooled two-proportion z-test.",
+        "result": {
+            "p1": 0.4332,
+            "p2": 0.0993,
+            "z": 11.161
+        },
+        "tolerance": {
+            "p1": 0.001,
+            "p2": 0.001,
+            "z": 0.01
+        }
+    },
+    {
+        "id": 10,
+        "db_id": [
+            "formula_1",
+            "european_football_2"
+        ],
+        "difficulty": "challenging",
+        "question": "To examine whether a country's Formula 1 constructor winning tendency is associated with its domestic football league's scoring intensity, compute the Spearman correlation between country-level constructor win rate and average total goals per match. Return the result as {\"spearman_r\": <float>}.",
+        "evidence": "Constructor win rate = total wins divided by total race appearances, aggregated by constructor nationality. Average total goals per match = average of (home_team_goal + away_team_goal), aggregated by country. Only include countries that have at least one recorded constructor win. Only include countries present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "formula_1",
+                "sql": "SELECT c.nationality, CAST(SUM(cs.wins) AS REAL) / COUNT(*) AS win_rate FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality"
+            },
+            {
+                "db": "european_football_2",
+                "sql": "SELECT co.name, AVG(m.home_team_goal + m.away_team_goal) AS avg_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name"
+            }
+        ],
+        "analysis": "Map F1 constructor nationality adjectives to country nouns. Filter to countries with win_rate > 0. Join on country name. For overlapping countries only, compute Spearman r between win_rate and avg_goals.",
+        "result": {
+            "spearman_r": 0.8
+        },
+        "tolerance": {
+            "spearman_r": 0.05
+        }
+    },
+    {
+        "id": 11,
+        "db_id": [
+            "formula_1",
+            "european_football_2"
+        ],
+        "difficulty": "simple",
+        "question": "To examine whether a country's geographic position is associated with its domestic football league's defensive play, compute the Pearson correlation between a country's average F1 circuit latitude and its average goals conceded per match as the away team. Return the result as {\"r\": <float>}.",
+        "evidence": "Average circuit latitude = mean of lat across all circuits in that country. Average away goals conceded = mean of away_team_goal per match, aggregated by country. Only include countries present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "formula_1",
+                "sql": "SELECT ci.country, AVG(ci.lat) AS avg_lat FROM circuits ci WHERE ci.lat IS NOT NULL GROUP BY ci.country"
+            },
+            {
+                "db": "european_football_2",
+                "sql": "SELECT co.name, AVG(m.away_team_goal) AS avg_away_goals FROM Match m JOIN Country co ON m.country_id = co.id WHERE m.away_team_goal IS NOT NULL GROUP BY co.name"
+            }
+        ],
+        "analysis": "Join on exact country name (circuits.country = Country.name). For overlapping countries only, compute Pearson r between avg_lat and avg_away_goals.",
+        "result": {
+            "r": 0.6134
+        },
+        "tolerance": {
+            "r": 0.01
+        }
+    },
+    {
+        "id": 12,
+        "db_id": [
+            "financial",
+            "thrombosis_prediction"
+        ],
+        "difficulty": "challenging",
+        "question": "To compare adverse outcome rates across two independent clinical and financial domains, perform a two-proportion z-test between the delinquency rate among active loans and the thrombosis rate among hospitalized patients. Return the result as {\"p1\": <float>, \"p2\": <float>, \"z\": <float>}.",
+        "evidence": "p1 = proportion of currently active loans (status = 'C' or 'D') that are in delinquency (status = 'D'). p2 = proportion of hospitalized patients (Admission = '+') who have confirmed thrombosis (Thrombosis >= 1). Use a two-sided pooled two-proportion z-test.",
+        "intermediate_sqls": [
+            {
+                "db": "financial",
+                "sql": "SELECT SUM(CASE WHEN status = 'D' THEN 1 ELSE 0 END) AS x1, COUNT(*) AS n1 FROM loan WHERE status IN ('C', 'D')"
+            },
+            {
+                "db": "thrombosis_prediction",
+                "sql": "SELECT SUM(CASE WHEN e.Thrombosis >= 1 THEN 1 ELSE 0 END) AS x2, COUNT(*) AS n2 FROM Examination e JOIN Patient p ON e.ID = p.ID WHERE p.Admission = '+' AND e.Thrombosis IS NOT NULL"
+            }
+        ],
+        "analysis": "Step 1: x1 = count(status='D'), n1 = total count(status IN ('C','D')). Compute p1 = x1/n1. Step 2: x2 = sum(cnt where Thrombosis >= 1), n2 = sum(all cnt). Compute p2 = x2/n2. Step 3: Pooled two-proportion z-test.",
+        "result": {
+            "p1": 0.1004,
+            "p2": 0.2333,
+            "z": -2.263
+        },
+        "tolerance": {
+            "p1": 0.01,
+            "p2": 0.01,
+            "z": 0.1
+        }
+    },
+    {
+        "id": 13,
+        "db_id": [
+            "formula_1",
+            "european_football_2"
+        ],
+        "difficulty": "moderate",
+        "question": "To examine whether a country's Formula 1 constructor dominance is associated with its domestic football league's home advantage, compute the Pearson correlation between country-level total constructor championship points and average home team goals per match. Return the result as {\"r\": <float>}.",
+        "evidence": "Total constructor championship points = sum of all points from constructorStandings, aggregated by constructor nationality. Average home team goals per match = mean of home_team_goal, aggregated by country. Only include countries present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "formula_1",
+                "sql": "SELECT c.nationality, SUM(cs.points) AS total_points FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality"
+            },
+            {
+                "db": "european_football_2",
+                "sql": "SELECT co.name, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name"
+            }
+        ],
+        "analysis": "Map F1 constructor nationality adjectives to country nouns (e.g., British→England, Italian→Italy). Note Belgium is stored as a noun in the F1 DB. Join on mapped country name. For overlapping countries only, compute Pearson r between total_points and avg_home_goals.",
+        "result": {
+            "r": -0.4127
+        },
+        "tolerance": {
+            "r": 0.01
+        }
+    },
+    {
+        "id": 14,
+        "db_id": [
+            "olympics",
+            "world_development_indicators"
+        ],
+        "difficulty": "moderate",
+        "question": "To examine whether national economic wealth is associated with Olympic success, compute the Pearson correlation between countries' GDP per capita and their total medal count at the 2008 Summer Olympics. Return the result as {\"r\": <float>}.",
+        "evidence": "GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2008. Medal counts include Gold, Silver, and Bronze only. Apply the following country name mappings from the olympics database to world_development_indicators: USA→United States, UK→United Kingdom, Russia→Russian Federation, South Korea→Korea, Rep., Iran→Iran, Islamic Rep., Egypt→Egypt, Arab Rep., Venezuela→Venezuela, RB, Kyrgyzstan→Kyrgyz Republic, Slovakia→Slovak Republic, Bahamas→Bahamas, The, Ivory Coast→Cote d'Ivoire. Exclude historical or dissolved nations with no WDI entry: Soviet Union, East Germany, West Germany, Unified Team, Yugoslavia, Czechoslovakia, Serbia and Montenegro, Taiwan, North Korea, Individual Olympic Athletes, Australasia. Only include countries present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "olympics",
+                "sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2008 AND g.season = 'Summer' GROUP BY nr.region_name"
+            },
+            {
+                "db": "world_development_indicators",
+                "sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2008"
+            }
+        ],
+        "analysis": "Apply country name mapping. Exclude dissolved nations. Join on country name. For overlapping countries, compute Pearson r between gdp_per_capita and total_medals.",
+        "result": {
+            "r": 0.2608
+        },
+        "tolerance": {
+            "r": 0.01
+        }
+    },
+    {
+        "id": 15,
+        "db_id": [
+            "olympics",
+            "world_development_indicators"
+        ],
+        "difficulty": "challenging",
+        "question": "To examine how national economic wealth predicts Olympic success, compute the slope of the simple linear regression predicting total medal count from GDP per capita for the 2012 Summer Olympics. Return the result as {\"slope\": <float>}.",
+        "evidence": "GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2012. Medal counts include Gold, Silver, and Bronze only. Apply country name mappings: USA→United States, UK→United Kingdom, Russia→Russian Federation, South Korea→Korea, Rep., Iran→Iran, Islamic Rep., Egypt→Egypt, Arab Rep., Venezuela→Venezuela, RB, Kyrgyzstan→Kyrgyz Republic, Slovakia→Slovak Republic, Bahamas→Bahamas, The, Ivory Coast→Cote d'Ivoire. Exclude: Soviet Union, East Germany, West Germany, Unified Team, Yugoslavia, Czechoslovakia, Serbia and Montenegro, Taiwan, North Korea, Individual Olympic Athletes, Australasia. Only include countries present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "olympics",
+                "sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2012 AND g.season = 'Summer' GROUP BY nr.region_name"
+            },
+            {
+                "db": "world_development_indicators",
+                "sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012"
+            }
+        ],
+        "analysis": "Apply country name mapping. Exclude dissolved nations. Join on country name. For overlapping countries, compute OLS regression slope with GDP per capita as predictor (x) and total medals as outcome (y).",
+        "result": {
+            "slope": 0.00053765
+        },
+        "tolerance": {
+            "slope": 1e-06
+        }
+    },
+    {
+        "id": 16,
+        "db_id": [
+            "olympics",
+            "world_development_indicators"
+        ],
+        "difficulty": "challenging",
+        "question": "To model the joint effect of economic wealth and population size on Olympic performance, fit an OLS multiple linear regression predicting each country's total medal count from GDP per capita and total population for the 2012 Summer Olympics. Return the intercept and two coefficients as {\"beta_0\": <float>, \"beta_1\": <float>, \"beta_2\": <float>}.",
+        "evidence": "GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2012. Total population uses indicator code SP.POP.TOTL for year 2012. Medal counts include Gold, Silver, and Bronze only. Apply country name mappings: USA→United States, UK→United Kingdom, Russia→Russian Federation, South Korea→Korea, Rep., Iran→Iran, Islamic Rep., Egypt→Egypt, Arab Rep., Venezuela→Venezuela, RB, Kyrgyzstan→Kyrgyz Republic, Slovakia→Slovak Republic, Bahamas→Bahamas, The, Ivory Coast→Cote d'Ivoire. Exclude: Soviet Union, East Germany, West Germany, Unified Team, Yugoslavia, Czechoslovakia, Serbia and Montenegro, Taiwan, North Korea, Individual Olympic Athletes, Australasia. Only include countries present in all three datasets.",
+        "intermediate_sqls": [
+            {
+                "db": "olympics",
+                "sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2012 AND g.season = 'Summer' GROUP BY nr.region_name"
+            },
+            {
+                "db": "world_development_indicators",
+                "sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012"
+            },
+            {
+                "db": "world_development_indicators",
+                "sql": "SELECT CountryName, Value AS population FROM Indicators WHERE IndicatorCode = 'SP.POP.TOTL' AND Year = 2012"
+            }
+        ],
+        "analysis": "Apply country name mapping. Exclude dissolved nations. Intersect all three datasets (n=81). Construct design matrix X = [1, gdp_per_capita, population] and target y = medal_count. Solve OLS normal equations β = (XᵀX)⁻¹Xᵀy to get β0, β1, β2.",
+        "result": {
+            "beta_0": 5.5546,
+            "beta_1": 0.0006213738,
+            "beta_2": 7.29e-08
+        },
+        "tolerance": {
+            "beta_0": 0.01,
+            "beta_1": 1e-06,
+            "beta_2": 1e-09
+        }
+    },
+    {
+        "id": 17,
+        "db_id": [
+            "chicago_crime",
+            "social_media"
+        ],
+        "difficulty": "simple",
+        "question": "To examine whether days with more crime activity are associated with different social media emotional tones, compute the Pearson correlation between the total crime count per weekday and the average tweet sentiment per weekday. Return the result as {\"r\": <float>}.",
+        "evidence": "Total crime count per weekday = total crimes aggregated by day of week across all dates in chicago_crime. Crime date is stored as 'M/D/YYYY H:MM' format (e.g., '1/15/2018 9:30'). Average tweet sentiment = mean Sentiment per weekday across all tweets in social_media. Only include weekdays present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "chicago_crime",
+                "sql": "SELECT strftime('%w', SUBSTR(date, INSTR(date,'/')+INSTR(SUBSTR(date,INSTR(date,'/')+1),'/')+1, 4) || '-' || PRINTF('%02d', CAST(SUBSTR(date, 1, INSTR(date,'/')-1) AS INT)) || '-' || PRINTF('%02d', CAST(SUBSTR(SUBSTR(date,INSTR(date,'/')+1), 1, INSTR(SUBSTR(date,INSTR(date,'/')+1),'/')-1) AS INT))) AS dow, COUNT(*) AS crime_count FROM Crime GROUP BY dow"
+            },
+            {
+                "db": "social_media",
+                "sql": "SELECT Weekday, AVG(Sentiment) AS avg_sentiment FROM twitter GROUP BY Weekday"
+            }
+        ],
+        "analysis": "Map dow integers (0=Sunday ... 6=Saturday) to weekday names. Join on weekday name. Compute Pearson r between crime_count and avg_sentiment.",
+        "result": {
+            "r": 0.419
+        },
+        "tolerance": {
+            "r": 0.01
+        }
+    },
+    {
+        "id": 18,
+        "db_id": [
+            "professional_basketball",
+            "world_development_indicators"
+        ],
+        "difficulty": "moderate",
+        "question": "To examine whether wealthier countries produce more NBA talent, compute the Spearman correlation between the number of NBA players born in each country and that country's GDP per capita. Return the result as {\"spearman_r\": <float>}.",
+        "evidence": "Count distinct NBA players (lgID = 'NBA') per birth country from the players table. GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2000. Player birth country is stored as an IOC 3-letter code; map to WDI country names accordingly. Exclude dissolved or non-sovereign entities with no WDI entry. Only include countries present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "professional_basketball",
+                "sql": "SELECT p.birthCountry, COUNT(DISTINCT p.playerID) AS player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL GROUP BY p.birthCountry ORDER BY player_count DESC"
+            },
+            {
+                "db": "world_development_indicators",
+                "sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2000"
+            }
+        ],
+        "analysis": "Map IOC 3-letter codes to WDI country names. Exclude dissolved/non-sovereign entities. Join on country name. Compute Spearman r between player_count and gdp_per_capita.",
+        "result": {
+            "spearman_r": 0.0474
+        },
+        "tolerance": {
+            "spearman_r": 0.01
+        }
+    },
+    {
+        "id": 19,
+        "db_id": [
+            "professional_basketball",
+            "olympics"
+        ],
+        "difficulty": "moderate",
+        "question": "To examine whether countries that excel at basketball also perform well at the Olympics, compute the Pearson correlation between the number of NBA players born in each country and that country's total medal count at the 2000 Summer Olympics. Return the result as {\"r\": <float>}.",
+        "evidence": "Count distinct NBA players (lgID = 'NBA') per birth country. Player birth country is stored as an IOC 3-letter code. Medal counts include Gold, Silver, and Bronze only from the 2000 Summer Olympics. Exclude dissolved or non-sovereign entities. Only include countries present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "professional_basketball",
+                "sql": "SELECT p.birthCountry, COUNT(DISTINCT p.playerID) AS player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL GROUP BY p.birthCountry ORDER BY player_count DESC"
+            },
+            {
+                "db": "olympics",
+                "sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2000 AND g.season = 'Summer' GROUP BY nr.region_name"
+            }
+        ],
+        "analysis": "Map basketball IOC 3-letter codes to olympics region names (e.g., HOL→Netherlands, NGR→Nigeria, ENG→UK). Exclude dissolved/non-sovereign entities. Join on mapped country name. Compute Pearson r between player_count and total_medals.",
+        "result": {
+            "r": 0.5893
+        },
+        "tolerance": {
+            "r": 0.01
+        }
+    },
+    {
+        "id": 20,
+        "db_id": [
+            "olympics",
+            "world_development_indicators"
+        ],
+        "difficulty": "moderate",
+        "question": "To examine whether wealthier nations win more Olympic medals, run a Welch's t-test comparing all-time Olympic medal counts between High income and Low income countries. Return the result as {\"t\": <float>, \"p\": <float>}.",
+        "evidence": "All-time medal counts include Gold, Silver, and Bronze across all Olympic Games. Income groups are from the Country table in world_development_indicators (IncomeGroup column). High income = IncomeGroup starting with 'High income'. Low income = 'Low income' or 'Lower middle income'. Exclude Upper middle income countries from both groups. Exclude dissolved or non-sovereign nations with no WDI entry. Only include countries present in both databases.",
+        "intermediate_sqls": [
+            {
+                "db": "olympics",
+                "sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) GROUP BY nr.region_name"
+            },
+            {
+                "db": "world_development_indicators",
+                "sql": "SELECT ShortName, IncomeGroup FROM Country WHERE IncomeGroup IS NOT NULL AND IncomeGroup != ''"
+            }
+        ],
+        "analysis": "Apply country name mapping (e.g., USA→United States, UK→United Kingdom). Exclude dissolved nations. Join on country name. Split into High income vs Low/Lower-middle income groups. Run two-sided Welch t-test on total_medals.",
+        "result": {
+            "t": 4.0167,
+            "p": 0.0002
+        },
+        "tolerance": {
+            "t": 0.01,
+            "p": 0.0001
+        }
+    }
+]
