@@ -1,0 +1,1626 @@
+[
+    {
+        "task_id": 1,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "chicago_crime",
+                    "food_inspection_2"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "food_inspection_2",
+                        "sql": "SELECT e.ward AS ward_no, AVG(CASE WHEN i.results = 'Fail' THEN 1.0 ELSE 0.0 END) AS fail_rate, COUNT(*) AS inspections FROM inspection i JOIN establishment e ON i.license_no = e.license_no WHERE e.ward IS NOT NULL GROUP BY e.ward"
+                    },
+                    {
+                        "db": "chicago_crime",
+                        "sql": "SELECT ward_no, AVG(CASE WHEN arrest = 'TRUE' THEN 1.0 ELSE 0.0 END) AS arrest_rate, COUNT(*) AS crimes FROM Crime WHERE ward_no IS NOT NULL GROUP BY ward_no"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT e.ward, CAST(SUM(CASE WHEN i.results = 'Fail' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS fail_rate FROM establishment AS e INNER JOIN inspection AS i ON e.license_no = i.license_no GROUP BY e.ward",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT ward_no, CAST(SUM(CASE WHEN arrest = 'TRUE' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS arrest_rate FROM Crime GROUP BY ward_no",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nfrom scipy.stats import pearsonr\n\nq1 = \"SELECT e.ward AS ward_no, AVG(CASE WHEN i.results = 'Fail' THEN 1.0 ELSE 0.0 END) AS fail_rate, COUNT(*) AS inspections FROM inspection i JOIN establishment e ON i.license_no = e.license_no WHERE e.ward IS NOT NULL GROUP BY e.ward\"\nq2 = \"SELECT ward_no, AVG(CASE WHEN arrest = 'TRUE' THEN 1.0 ELSE 0.0 END) AS arrest_rate, COUNT(*) AS crimes FROM Crime WHERE ward_no IS NOT NULL GROUP BY ward_no\"\n\nconn1 = sqlite3.connect(\"dev/databases/food_inspection_2/food_inspection_2.sqlite\")\ndf1 = pd.read_sql_query(q1, conn1)\nconn1.close()\n\nconn2 = sqlite3.connect(\"dev/databases/chicago_crime/chicago_crime.sqlite\")\ndf2 = pd.read_sql_query(q2, conn2)\nconn2.close()\n\nmerged = df1.merge(df2, on=\"ward_no\", how=\"inner\")\nr, _ = pearsonr(merged[\"fail_rate\"], merged[\"arrest_rate\"])\nprint(json.dumps({\"answer\": r}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "answer": 0.5178748871588552
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "answer": 0.5178748871588552
+                },
+                "gold_answer": {
+                    "r": 0.518
+                },
+                "correct": true,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 801,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 10496
+                },
+                "cost_usd": 0.072505
+            }
+        ]
+    },
+    {
+        "task_id": 2,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "chicago_crime",
+                    "sales_in_weather"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "chicago_crime",
+                        "sql": "SELECT substr('0'||substr(date, 1, instr(date,'/')-1), -2) AS month, substr(date, instr(date,'/')+1) AS rest, COUNT(*) AS domestic_count FROM Crime WHERE domestic = 'TRUE' GROUP BY substr(date,1,instr(date,'/')-1), substr(substr(date,instr(date,'/')+1), instr(substr(date,instr(date,'/')+1),'/')+1, 4)"
+                    },
+                    {
+                        "db": "chicago_crime",
+                        "sql": "SELECT date, domestic FROM Crime"
+                    },
+                    {
+                        "db": "sales_in_weather",
+                        "sql": "SELECT strftime('%Y-%m', date) AS ym, AVG(preciptotal) AS avg_precip FROM weather WHERE preciptotal IS NOT NULL GROUP BY strftime('%Y-%m', date)"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT yr_month, AVG(station_avg) AS avg_precip FROM (SELECT station_nbr, SUBSTR(date, 1, 7) AS yr_month, AVG(preciptotal) AS station_avg FROM weather WHERE preciptotal IS NOT NULL GROUP BY station_nbr, SUBSTR(date, 1, 7)) GROUP BY yr_month",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT PRINTF('%04d-%02d', CAST(SUBSTR(date, INSTR(date,'/')+INSTR(SUBSTR(date,INSTR(date,'/')+1),'/') +1, 4) AS INT), CAST(SUBSTR(date, 1, INSTR(date,'/')-1) AS INT)) AS yr_month, CAST(SUM(CASE WHEN domestic = 'TRUE' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS dv_rate FROM Crime GROUP BY yr_month",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport numpy as np\nimport pandas as pd\nfrom scipy import stats\n\n# Get crime data\nconn = sqlite3.connect(\"dev/databases/chicago_crime/chicago_crime.sqlite\")\ncrime_df = pd.read_sql_query(\"SELECT date, domestic FROM Crime\", conn)\nconn.close()\n\n# Parse dates - format is M/D/YYYY ...\ndef parse_ym(s):\n    try:\n        parts = s.split('/')\n        month = int(parts[0])\n        rest = parts[1:]\n        # year is in third part, possibly with time\n        year_part = parts[2].split(' ')[0]\n        year = int(year_part)\n        return f\"{year:04d}-{month:02d}\"\n    except:\n        return None\n\ncrime_df['ym'] = crime_df['date'].apply(parse_ym)\ncrime_df = crime_df[crime_df['ym'].notna()]\n\n# Convert domestic to boolean - handle various formats\ndef is_domestic(v):\n    if v is None:\n        return False\n    s = str(v).strip().upper()\n    return s in ('TRUE', '1', 'T')\n\ncrime_df['is_dom'] = crime_df['domestic'].apply(is_domestic)\nmonthly_dom = crime_df.groupby('ym')['is_dom'].sum().reset_index()\nmonthly_dom.columns = ['ym', 'domestic_count']\n\n# Get weather data\nconn = sqlite3.connect(\"dev/databases/sales_in_weather/sales_in_weather.sqlite\")\nweather_df = pd.read_sql_query(\n    \"SELECT strftime('%Y-%m', date) AS ym, AVG(preciptotal) AS avg_precip FROM weather WHERE preciptotal IS NOT NULL GROUP BY strftime('%Y-%m', date)\",\n    conn\n)\nconn.close()\n\n# Weather preciptotal might be string with 'M' or 'T' for trace\n# Re-query raw\nconn = sqlite3.connect(\"dev/databases/sales_in_weather/sales_in_weather.sqlite\")\nraw_w = pd.read_sql_query(\"SELECT date, preciptotal FROM weather\", conn)\nconn.close()\n\ndef to_float(v):\n    if v is None:\n        return np.nan\n    s = str(v).strip()\n    if s in ('M', '-', ''):\n        return np.nan\n    if s == 'T':\n        return 0.0\n    try:\n        return float(s)\n    except:\n        return np.nan\n\nraw_w['precip'] = raw_w['preciptotal'].apply(to_float)\nraw_w = raw_w.dropna(subset=['precip'])\nraw_w['ym'] = pd.to_datetime(raw_w['date']).dt.strftime('%Y-%m')\nweather_monthly = raw_w.groupby('ym')['precip'].mean().reset_index()\nweather_monthly.columns = ['ym', 'avg_precip']\n\n# Merge\nmerged = pd.merge(monthly_dom, weather_monthly, on='ym', how='inner')\n\nthreshold = merged['avg_precip'].quantile(0.75)\nharsh = merged[merged['avg_precip'] > threshold]['domestic_count'].values\nnon_harsh = merged[merged['avg_precip'] <= threshold]['domestic_count'].values\n\nt, p = stats.ttest_ind(harsh, non_harsh, equal_var=False)\n\nprint(json.dumps({\"t\": float(t), \"p\": float(p)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "t": 6.1515700817914425,
+                    "p": 0.00010827988433542722
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "t": 6.1515700817914425,
+                    "p": 0.00010827988433542722
+                },
+                "gold_answer": {
+                    "t": 2.27,
+                    "p": 0.113
+                },
+                "correct": false,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 1576,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 9474
+                },
+                "cost_usd": 0.08677
+            }
+        ]
+    },
+    {
+        "task_id": 3,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "mental_health_survey",
+                    "synthea"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "mental_health_survey",
+                        "sql": "SELECT q.questionid, q.questiontext FROM Question q WHERE LOWER(q.questiontext) LIKE '%mental health disorder%' OR LOWER(q.questiontext) LIKE '%mental illness%' OR LOWER(q.questiontext) LIKE '%do you currently have%'"
+                    },
+                    {
+                        "db": "mental_health_survey",
+                        "sql": "WITH ages AS (SELECT UserID, SurveyID, CAST(AnswerText AS INTEGER) AS age FROM Answer WHERE QuestionID = 1 AND AnswerText GLOB '[0-9]*'), genders AS (SELECT UserID, SurveyID, AnswerText AS gender FROM Answer WHERE QuestionID = 2), mh AS (SELECT UserID, SurveyID, AnswerText FROM Answer WHERE QuestionID = 33) SELECT g.gender, CASE WHEN a.age BETWEEN 18 AND 34 THEN '18-34' WHEN a.age BETWEEN 35 AND 49 THEN '35-49' WHEN a.age BETWEEN 50 AND 65 THEN '50-65' END AS age_group, COUNT(*) AS total, SUM(CASE WHEN LOWER(mh.AnswerText)='yes' THEN 1 ELSE 0 END) AS yes_count, 1.0*SUM(CASE WHEN LOWER(mh.AnswerText)='yes' THEN 1 ELSE 0 END)/COUNT(*) AS rate FROM ages a JOIN genders g ON a.UserID=g.UserID AND a.SurveyID=g.SurveyID JOIN mh ON a.UserID=mh.UserID AND a.SurveyID=mh.SurveyID WHERE a.age BETWEEN 18 AND 65 AND g.gender IN ('Male','Female') GROUP BY g.gender, age_group"
+                    },
+                    {
+                        "db": "synthea",
+                        "sql": "WITH pat AS (SELECT p.patient, p.gender, CAST((julianday('now') - julianday(p.birthdate))/365.25 AS INTEGER) AS age FROM patients p WHERE p.deathdate IS NULL), pat_grp AS (SELECT patient, gender, CASE WHEN age BETWEEN 18 AND 34 THEN '18-34' WHEN age BETWEEN 35 AND 49 THEN '35-49' WHEN age BETWEEN 50 AND 65 THEN '50-65' END AS age_group FROM pat WHERE age BETWEEN 18 AND 65 AND gender IN ('M','F')), claim_totals AS (SELECT PATIENT, SUM(TOTAL) AS total_claims FROM claims GROUP BY PATIENT) SELECT pg.gender, pg.age_group, pg.patient, COALESCE(ct.total_claims, 0) AS total_claims FROM pat_grp pg LEFT JOIN claim_totals ct ON pg.patient = ct.PATIENT"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT a_gender.AnswerText AS gender, CASE WHEN CAST(a_age.AnswerText AS INT) BETWEEN 18 AND 34 THEN '18-34' WHEN CAST(a_age.AnswerText AS INT) BETWEEN 35 AND 49 THEN '35-49' WHEN CAST(a_age.AnswerText AS INT) BETWEEN 50 AND 65 THEN '50-65' END AS age_group, CAST(SUM(CASE WHEN a_mh.AnswerText = 'Yes' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS mh_rate FROM Answer a_mh JOIN Answer a_gender ON a_mh.UserID = a_gender.UserID AND a_mh.SurveyID = a_gender.SurveyID JOIN Answer a_age ON a_mh.UserID = a_age.UserID AND a_mh.SurveyID = a_age.SurveyID WHERE a_mh.QuestionID = 33 AND a_gender.QuestionID = 2 AND a_gender.AnswerText IN ('Male', 'Female') AND a_age.QuestionID = 1 AND CAST(a_age.AnswerText AS INT) BETWEEN 18 AND 65 GROUP BY gender, age_group",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT p.patient, p.gender, CASE WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 18 AND 34 THEN '18-34' WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 35 AND 49 THEN '35-49' WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 50 AND 65 THEN '50-65' END AS age_group, SUM(cl.TOTAL) AS total_claims FROM patients p JOIN claims cl ON p.patient = cl.PATIENT WHERE p.deathdate IS NULL GROUP BY p.patient",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport numpy as np\nimport pandas as pd\nfrom scipy import stats\n\n# Query 2: mental health survey rates\nconn1 = sqlite3.connect(\"dev/databases/mental_health_survey/mental_health_survey.sqlite\")\nsql2 = \"\"\"WITH ages AS (SELECT UserID, SurveyID, CAST(AnswerText AS INTEGER) AS age FROM Answer WHERE QuestionID = 1 AND AnswerText GLOB '[0-9]*'), genders AS (SELECT UserID, SurveyID, AnswerText AS gender FROM Answer WHERE QuestionID = 2), mh AS (SELECT UserID, SurveyID, AnswerText FROM Answer WHERE QuestionID = 33) SELECT g.gender, CASE WHEN a.age BETWEEN 18 AND 34 THEN '18-34' WHEN a.age BETWEEN 35 AND 49 THEN '35-49' WHEN a.age BETWEEN 50 AND 65 THEN '50-65' END AS age_group, COUNT(*) AS total, SUM(CASE WHEN LOWER(mh.AnswerText)='yes' THEN 1 ELSE 0 END) AS yes_count, 1.0*SUM(CASE WHEN LOWER(mh.AnswerText)='yes' THEN 1 ELSE 0 END)/COUNT(*) AS rate FROM ages a JOIN genders g ON a.UserID=g.UserID AND a.SurveyID=g.SurveyID JOIN mh ON a.UserID=mh.UserID AND a.SurveyID=mh.SurveyID WHERE a.age BETWEEN 18 AND 65 AND g.gender IN ('Male','Female') GROUP BY g.gender, age_group\"\"\"\nsurvey = pd.read_sql(sql2, conn1)\nconn1.close()\n\n# Query 3: synthea claim totals\nconn2 = sqlite3.connect(\"dev/databases/synthea/synthea.sqlite\")\nsql3 = \"\"\"WITH pat AS (SELECT p.patient, p.gender, CAST((julianday('now') - julianday(p.birthdate))/365.25 AS INTEGER) AS age FROM patients p WHERE p.deathdate IS NULL), pat_grp AS (SELECT patient, gender, CASE WHEN age BETWEEN 18 AND 34 THEN '18-34' WHEN age BETWEEN 35 AND 49 THEN '35-49' WHEN age BETWEEN 50 AND 65 THEN '50-65' END AS age_group FROM pat WHERE age BETWEEN 18 AND 65 AND gender IN ('M','F')), claim_totals AS (SELECT PATIENT, SUM(TOTAL) AS total_claims FROM claims GROUP BY PATIENT) SELECT pg.gender, pg.age_group, pg.patient, COALESCE(ct.total_claims, 0) AS total_claims FROM pat_grp pg LEFT JOIN claim_totals ct ON pg.patient = ct.PATIENT\"\"\"\nclaims = pd.read_sql(sql3, conn2)\nconn2.close()\n\n# Map synthea genders\ngender_map = {'M': 'Male', 'F': 'Female'}\nclaims['gender'] = claims['gender'].map(gender_map)\n\n# Only include gender x age groups present in both\nsurvey_keys = set(zip(survey['gender'], survey['age_group']))\nclaims_keys = set(zip(claims['gender'], claims['age_group']))\ncommon = survey_keys & claims_keys\n\nsurvey = survey[survey.apply(lambda r: (r['gender'], r['age_group']) in common, axis=1)]\nclaims = claims[claims.apply(lambda r: (r['gender'], r['age_group']) in common, axis=1)]\n\nresult = {}\nfor gender in ['Female', 'Male']:\n    sub = survey[survey['gender'] == gender]\n    median_rate = sub['rate'].median()\n    high_groups = set(sub[sub['rate'] > median_rate]['age_group'])\n    low_groups = set(sub[sub['rate'] <= median_rate]['age_group'])\n    \n    cl = claims[claims['gender'] == gender]\n    high_vals = cl[cl['age_group'].isin(high_groups)]['total_claims'].values\n    low_vals = cl[cl['age_group'].isin(low_groups)]['total_claims'].values\n    \n    t, p = stats.ttest_ind(high_vals, low_vals, equal_var=False)\n    key = gender.lower()\n    result[f\"{key}_t\"] = float(t)\n    result[f\"{key}_p\"] = float(p)\n\nprint(json.dumps(result))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "female_t": -0.2902169086573195,
+                    "female_p": 0.7718668517705665,
+                    "male_t": -4.4470342087120525,
+                    "male_p": 1.2397344919855991e-05
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "female_t": -0.2902169086573195,
+                    "female_p": 0.7718668517705665,
+                    "male_t": -4.4470342087120525,
+                    "male_p": 1.2397344919855991e-05
+                },
+                "gold_answer": {
+                    "female_t": -0.46,
+                    "female_p": 0.64,
+                    "male_t": -4.42,
+                    "male_p": 0.0
+                },
+                "correct": false,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 2898,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 13263
+                },
+                "cost_usd": 0.138765
+            }
+        ]
+    },
+    {
+        "task_id": 4,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "college_completion",
+                    "student_loan"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "college_completion",
+                        "sql": "SELECT chronname, grad_150_value FROM institution_details WHERE chronname IN ('Orange Coast College','Santa Monica College','University of California at Berkeley','University of California at Los Angeles','University of California at San Diego','University of California at Irvine')"
+                    },
+                    {
+                        "db": "student_loan",
+                        "sql": "SELECT e.school AS school, COUNT(DISTINCT e.name) AS total_students, COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR f.name IS NOT NULL OR (np.bool = 'pos') THEN e.name END) AS adverse_students FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy f ON e.name = f.name LEFT JOIN no_payment_due np ON e.name = np.name GROUP BY e.school"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT e.school, CAST(COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR fb.name IS NOT NULL OR np.bool = 'pos' THEN e.name END) AS REAL) / COUNT(DISTINCT e.name) AS adverse_rate FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy fb ON e.name = fb.name LEFT JOIN no_payment_due np ON e.name = np.name GROUP BY e.school",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT chronname, grad_150_value FROM institution_details WHERE grad_150_value IS NOT NULL",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nfrom scipy.stats import spearmanr\n\nconn1 = sqlite3.connect(\"dev/databases/college_completion/college_completion.sqlite\")\ndf1 = pd.read_sql_query(\n    \"SELECT chronname, grad_150_value FROM institution_details WHERE chronname IN ('Orange Coast College','Santa Monica College','University of California at Berkeley','University of California at Los Angeles','University of California at San Diego','University of California at Irvine')\",\n    conn1\n)\nconn1.close()\n\nconn2 = sqlite3.connect(\"dev/databases/student_loan/student_loan.sqlite\")\ndf2 = pd.read_sql_query(\n    \"SELECT e.school AS school, COUNT(DISTINCT e.name) AS total_students, COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR f.name IS NOT NULL OR (np.bool = 'pos') THEN e.name END) AS adverse_students FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy f ON e.name = f.name LEFT JOIN no_payment_due np ON e.name = np.name GROUP BY e.school\",\n    conn2\n)\nconn2.close()\n\nmapping = {\n    \"occ\": \"Orange Coast College\",\n    \"smc\": \"Santa Monica College\",\n    \"ucb\": \"University of California at Berkeley\",\n    \"ucla\": \"University of California at Los Angeles\",\n    \"ucsd\": \"University of California at San Diego\",\n    \"uci\": \"University of California at Irvine\",\n}\ndf2[\"chronname\"] = df2[\"school\"].map(mapping)\ndf2[\"adverse_rate\"] = df2[\"adverse_students\"] / df2[\"total_students\"]\n\nmerged = pd.merge(df1, df2, on=\"chronname\", how=\"inner\")\nmerged = merged.dropna(subset=[\"grad_150_value\", \"adverse_rate\"])\nmerged[\"grad_150_value\"] = pd.to_numeric(merged[\"grad_150_value\"], errors=\"coerce\")\nmerged = merged.dropna(subset=[\"grad_150_value\"])\n\nr, p = spearmanr(merged[\"grad_150_value\"], merged[\"adverse_rate\"])\nprint(json.dumps({\"spearman_r\": float(r), \"p_value\": float(p)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "spearman_r": -0.05797710356524484,
+                    "p_value": 0.9131317851623264
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "spearman_r": -0.05797710356524484,
+                    "p_value": 0.9131317851623264
+                },
+                "gold_answer": {
+                    "spearman_r": -0.06,
+                    "p_value": 0.913
+                },
+                "correct": true,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 1147,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 11596
+                },
+                "cost_usd": 0.086655
+            }
+        ]
+    },
+    {
+        "task_id": 5,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "college_completion",
+                    "human_resources",
+                    "student_loan"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "college_completion",
+                        "sql": "SELECT chronname, exp_award_value FROM institution_details WHERE chronname IN ('Orange Coast College','Santa Monica College','University of California at Berkeley','University of California at Los Angeles','University of California at San Diego','University of California at Irvine')"
+                    },
+                    {
+                        "db": "human_resources",
+                        "sql": "SELECT AVG(CAST(REPLACE(REPLACE(REPLACE(maxsalary,'US$',''),',',''),'.00','') AS REAL)) AS avg_max_bachelor FROM position WHERE educationrequired='4 year degree'"
+                    },
+                    {
+                        "db": "student_loan",
+                        "sql": "SELECT e.school, COUNT(DISTINCT e.name) AS total, COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR f.name IS NOT NULL OR (n.name IS NOT NULL AND n.bool='neg') THEN e.name END) AS adverse FROM enrolled e LEFT JOIN unemployed u ON e.name=u.name LEFT JOIN filed_for_bankrupcy f ON e.name=f.name LEFT JOIN no_payment_due n ON e.name=n.name GROUP BY e.school"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT e.school, CAST(COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR fb.name IS NOT NULL OR np.bool = 'pos' THEN e.name END) AS REAL) / COUNT(DISTINCT e.name) AS adverse_rate FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy fb ON e.name = fb.name LEFT JOIN no_payment_due np ON e.name = np.name GROUP BY e.school",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT chronname, exp_award_value FROM institution_details WHERE exp_award_value IS NOT NULL",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT AVG(CAST(REPLACE(REPLACE(maxsalary, 'US$', ''), ',', '') AS REAL)) AS avg_maxsalary FROM position WHERE educationrequired = '4 year degree'",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nimport numpy as np\nfrom scipy.stats import pearsonr\n\n# Query 1: college_completion\nconn1 = sqlite3.connect(\"dev/databases/college_completion/college_completion.sqlite\")\nq1 = \"\"\"SELECT chronname, exp_award_value FROM institution_details WHERE chronname IN ('Orange Coast College','Santa Monica College','University of California at Berkeley','University of California at Los Angeles','University of California at San Diego','University of California at Irvine')\"\"\"\ndf1 = pd.read_sql(q1, conn1)\nconn1.close()\n\n# Query 2: human_resources\nconn2 = sqlite3.connect(\"dev/databases/human_resources/human_resources.sqlite\")\nq2 = \"\"\"SELECT AVG(CAST(REPLACE(REPLACE(REPLACE(maxsalary,'US$',''),',',''),'.00','') AS REAL)) AS avg_max_bachelor FROM position WHERE educationrequired='4 year degree'\"\"\"\navg_max = pd.read_sql(q2, conn2).iloc[0, 0]\nconn2.close()\n\n# Query 3: student_loan\nconn3 = sqlite3.connect(\"dev/databases/student_loan/student_loan.sqlite\")\nq3 = \"\"\"SELECT e.school, COUNT(DISTINCT e.name) AS total, COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR f.name IS NOT NULL OR (n.name IS NOT NULL AND n.bool='neg') THEN e.name END) AS adverse FROM enrolled e LEFT JOIN unemployed u ON e.name=u.name LEFT JOIN filed_for_bankrupcy f ON e.name=f.name LEFT JOIN no_payment_due n ON e.name=n.name GROUP BY e.school\"\"\"\ndf3 = pd.read_sql(q3, conn3)\nconn3.close()\n\nmapping = {\n    'occ': 'Orange Coast College',\n    'smc': 'Santa Monica College',\n    'ucb': 'University of California at Berkeley',\n    'ucla': 'University of California at Los Angeles',\n    'ucsd': 'University of California at San Diego',\n    'uci': 'University of California at Irvine'\n}\n\ndf3['chronname'] = df3['school'].map(mapping)\ndf3 = df3.dropna(subset=['chronname'])\ndf3['adverse_rate'] = df3['adverse'] / df3['total']\n\nmerged = df1.merge(df3, on='chronname')\nmerged['ratio'] = merged['exp_award_value'] / avg_max\n\nr, _ = pearsonr(merged['ratio'], merged['adverse_rate'])\nprint(json.dumps({\"r\": float(r)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "r": 0.4220348634833789
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "r": 0.4220348634833789
+                },
+                "gold_answer": {
+                    "r": -0.63
+                },
+                "correct": false,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 1577,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 12685
+                },
+                "cost_usd": 0.10285
+            }
+        ]
+    },
+    {
+        "task_id": 6,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "formula_1",
+                    "european_football_2"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "formula_1",
+                        "sql": "SELECT c.nationality AS country, AVG(cs.position) AS avg_position FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId WHERE cs.position IS NOT NULL GROUP BY c.nationality"
+                    },
+                    {
+                        "db": "european_football_2",
+                        "sql": "SELECT co.name AS country, AVG(m.home_team_goal + m.away_team_goal) AS avg_goals FROM Match m JOIN Country co ON m.country_id = co.id WHERE m.home_team_goal IS NOT NULL AND m.away_team_goal IS NOT NULL GROUP BY co.name"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT c.nationality, AVG(cs.position) AS avg_position FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT co.name, AVG(m.home_team_goal + m.away_team_goal) AS avg_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nfrom scipy.stats import pearsonr\n\nconn1 = sqlite3.connect(\"dev/databases/formula_1/formula_1.sqlite\")\ndf1 = pd.read_sql_query(\n    \"SELECT c.nationality AS country, AVG(cs.position) AS avg_position \"\n    \"FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId \"\n    \"WHERE cs.position IS NOT NULL GROUP BY c.nationality\", conn1)\nconn1.close()\n\nconn2 = sqlite3.connect(\"dev/databases/european_football_2/european_football_2.sqlite\")\ndf2 = pd.read_sql_query(\n    \"SELECT co.name AS country, AVG(m.home_team_goal + m.away_team_goal) AS avg_goals \"\n    \"FROM Match m JOIN Country co ON m.country_id = co.id \"\n    \"WHERE m.home_team_goal IS NOT NULL AND m.away_team_goal IS NOT NULL GROUP BY co.name\", conn2)\nconn2.close()\n\nnationality_to_country = {\n    \"British\": \"England\",\n    \"Italian\": \"Italy\",\n    \"French\": \"France\",\n    \"German\": \"Germany\",\n    \"Spanish\": \"Spain\",\n    \"Swiss\": \"Switzerland\",\n    \"Dutch\": \"Netherlands\",\n    \"Belgian\": \"Belgium\",\n    \"Polish\": \"Poland\",\n    \"Portuguese\": \"Portugal\",\n    \"Scottish\": \"Scotland\",\n}\n\ndf1[\"country_norm\"] = df1[\"country\"].map(nationality_to_country)\ndf1 = df1.dropna(subset=[\"country_norm\"])\n\nmerged = df1.merge(df2, left_on=\"country_norm\", right_on=\"country\", suffixes=(\"_f1\", \"_fb\"))\n\nr, _ = pearsonr(merged[\"avg_position\"], merged[\"avg_goals\"])\nprint(json.dumps({\"r\": float(r)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "r": 0.4521656467432855
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "r": 0.4521656467432855
+                },
+                "gold_answer": {
+                    "r": 0.4536
+                },
+                "correct": true,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 943,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 17887
+                },
+                "cost_usd": 0.11301
+            }
+        ]
+    },
+    {
+        "task_id": 7,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "california_schools",
+                    "student_club"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "california_schools",
+                        "sql": "SELECT cname AS county, CAST(SUM(NumGE1500) AS REAL) / SUM(NumTstTakr) AS sat_high_rate FROM satscores WHERE rtype = 'D' AND NumTstTakr > 0 GROUP BY cname HAVING SUM(NumTstTakr) > 0"
+                    },
+                    {
+                        "db": "student_club",
+                        "sql": "SELECT county, AVG(CASE WHEN type = 'Standard' THEN 1.0 ELSE 0.0 END) AS standard_rate FROM zip_code WHERE state = 'California' GROUP BY county"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT REPLACE(county, ' County', '') AS county, CAST(SUM(CASE WHEN type = 'Standard' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS standard_rate FROM zip_code WHERE state = 'California' GROUP BY county",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT s.County, CAST(SUM(sat.NumGE1500) AS REAL) / SUM(sat.NumTstTakr) AS top_rate FROM schools s JOIN satscores sat ON s.CDSCode = sat.cds WHERE sat.NumTstTakr > 0 AND sat.NumGE1500 IS NOT NULL GROUP BY s.County",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nfrom scipy.stats import pearsonr\n\nq1 = \"SELECT cname AS county, CAST(SUM(NumGE1500) AS REAL) / SUM(NumTstTakr) AS sat_high_rate FROM satscores WHERE rtype = 'D' AND NumTstTakr > 0 GROUP BY cname HAVING SUM(NumTstTakr) > 0\"\nq2 = \"SELECT county, AVG(CASE WHEN type = 'Standard' THEN 1.0 ELSE 0.0 END) AS standard_rate FROM zip_code WHERE state = 'California' GROUP BY county\"\n\nconn1 = sqlite3.connect(\"dev/databases/california_schools/california_schools.sqlite\")\ndf1 = pd.read_sql_query(q1, conn1)\nconn1.close()\n\nconn2 = sqlite3.connect(\"dev/databases/student_club/student_club.sqlite\")\ndf2 = pd.read_sql_query(q2, conn2)\nconn2.close()\n\ndf1['county_norm'] = df1['county'].str.strip().str.lower().str.replace(' county', '', regex=False)\ndf2['county_norm'] = df2['county'].str.strip().str.lower().str.replace(' county', '', regex=False)\n\nmerged = df1.merge(df2, on='county_norm')\nr, _ = pearsonr(merged['standard_rate'], merged['sat_high_rate'])\nprint(json.dumps({\"r\": float(r)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "r": NaN
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "r": NaN
+                },
+                "gold_answer": {
+                    "r": -0.1903
+                },
+                "correct": false,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 767,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 12482
+                },
+                "cost_usd": 0.081585
+            }
+        ]
+    },
+    {
+        "task_id": 8,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "formula_1",
+                    "european_football_2"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "formula_1",
+                        "sql": "SELECT r.year AS year, SUM(cr.points) AS total_points FROM constructorResults cr JOIN constructors c ON cr.constructorId = c.constructorId JOIN races r ON cr.raceId = r.raceId WHERE c.nationality = 'British' AND r.year BETWEEN 2008 AND 2015 GROUP BY r.year ORDER BY r.year;"
+                    },
+                    {
+                        "db": "european_football_2",
+                        "sql": "SELECT CAST(SUBSTR(m.season, 1, 4) AS INTEGER) AS year, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN League l ON m.league_id = l.id WHERE l.name = 'England Premier League' AND CAST(SUBSTR(m.season, 1, 4) AS INTEGER) BETWEEN 2008 AND 2015 GROUP BY year ORDER BY year;"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT r.year, SUM(cs.points) AS brit_pts FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId JOIN races r ON cs.raceId = r.raceId WHERE c.nationality = 'British' AND r.year BETWEEN 2008 AND 2015 GROUP BY r.year",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT CAST(SUBSTR(m.season, 1, 4) AS INTEGER) AS season_year, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN League l ON m.league_id = l.id JOIN Country ct ON l.country_id = ct.id WHERE ct.name = 'England' AND CAST(SUBSTR(m.season, 1, 4) AS INTEGER) BETWEEN 2008 AND 2015 GROUP BY m.season",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nfrom scipy.stats import pearsonr\n\nq1 = \"SELECT r.year AS year, SUM(cr.points) AS total_points FROM constructorResults cr JOIN constructors c ON cr.constructorId = c.constructorId JOIN races r ON cr.raceId = r.raceId WHERE c.nationality = 'British' AND r.year BETWEEN 2008 AND 2015 GROUP BY r.year ORDER BY r.year;\"\nq2 = \"SELECT CAST(SUBSTR(m.season, 1, 4) AS INTEGER) AS year, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN League l ON m.league_id = l.id WHERE l.name = 'England Premier League' AND CAST(SUBSTR(m.season, 1, 4) AS INTEGER) BETWEEN 2008 AND 2015 GROUP BY year ORDER BY year;\"\n\ncon1 = sqlite3.connect(\"dev/databases/formula_1/formula_1.sqlite\")\ndf1 = pd.read_sql_query(q1, con1)\ncon1.close()\n\ncon2 = sqlite3.connect(\"dev/databases/european_football_2/european_football_2.sqlite\")\ndf2 = pd.read_sql_query(q2, con2)\ncon2.close()\n\nmerged = pd.merge(df1, df2, on=\"year\")\nr, p = pearsonr(merged[\"total_points\"], merged[\"avg_home_goals\"])\nprint(json.dumps({\"r\": float(r), \"p\": float(p)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "r": 0.21837343011381144,
+                    "p": 0.6033805517669698
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "r": 0.21837343011381144,
+                    "p": 0.6033805517669698
+                },
+                "gold_answer": {
+                    "r": 0.2279,
+                    "p": 0.5872
+                },
+                "correct": false,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 905,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 17847
+                },
+                "cost_usd": 0.11186
+            }
+        ]
+    },
+    {
+        "task_id": 9,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "toxicology",
+                    "thrombosis_prediction"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "toxicology",
+                        "sql": "SELECT SUM(CASE WHEN m.label = '+' THEN 1 ELSE 0 END) AS carcinogenic_count, COUNT(*) AS total_count FROM molecule m WHERE m.molecule_id IN (SELECT DISTINCT molecule_id FROM atom WHERE element = 'n');"
+                    },
+                    {
+                        "db": "thrombosis_prediction",
+                        "sql": "SELECT SUM(CASE WHEN Thrombosis >= 1 THEN 1 ELSE 0 END) AS thrombosis_count, COUNT(*) AS total_count FROM Examination;"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT SUM(CASE WHEN label = '+' THEN 1 ELSE 0 END) AS x1, COUNT(*) AS n1 FROM molecule WHERE molecule_id IN (SELECT DISTINCT molecule_id FROM atom WHERE element = 'n')",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT SUM(CASE WHEN Thrombosis >= 1 THEN 1 ELSE 0 END) AS x2, COUNT(*) AS n2 FROM Examination WHERE Thrombosis IS NOT NULL",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport math\n\nqueries = [\n    {\n        \"db_path\": \"dev/databases/toxicology/toxicology.sqlite\",\n        \"sql\": \"SELECT SUM(CASE WHEN m.label = '+' THEN 1 ELSE 0 END) AS carcinogenic_count, COUNT(*) AS total_count FROM molecule m WHERE m.molecule_id IN (SELECT DISTINCT molecule_id FROM atom WHERE element = 'n');\"\n    },\n    {\n        \"db_path\": \"dev/databases/thrombosis_prediction/thrombosis_prediction.sqlite\",\n        \"sql\": \"SELECT SUM(CASE WHEN Thrombosis >= 1 THEN 1 ELSE 0 END) AS thrombosis_count, COUNT(*) AS total_count FROM Examination;\"\n    }\n]\n\nresults = []\nfor q in queries:\n    conn = sqlite3.connect(q[\"db_path\"])\n    cur = conn.cursor()\n    cur.execute(q[\"sql\"])\n    results.append(cur.fetchall())\n    conn.close()\n\nx1, n1 = results[0][0]\nx2, n2 = results[1][0]\n\np1 = x1 / n1\np2 = x2 / n2\np_pool = (x1 + x2) / (n1 + n2)\nse = math.sqrt(p_pool * (1 - p_pool) * (1/n1 + 1/n2))\nz = (p1 - p2) / se\n\nprint(json.dumps({\"p1\": p1, \"p2\": p2, \"z\": z}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "p1": 0.43315508021390375,
+                    "p2": 0.09925558312655088,
+                    "z": 11.161025803320708
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "p1": 0.43315508021390375,
+                    "p2": 0.09925558312655088,
+                    "z": 11.161025803320708
+                },
+                "gold_answer": {
+                    "p1": 0.4332,
+                    "p2": 0.0993,
+                    "z": 11.161
+                },
+                "correct": true,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 787,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 9156
+                },
+                "cost_usd": 0.065455
+            }
+        ]
+    },
+    {
+        "task_id": 10,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "formula_1",
+                    "european_football_2"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "formula_1",
+                        "sql": "SELECT c.nationality AS country, CAST(SUM(cr.wins) AS REAL) / SUM(cr.appearances) AS win_rate FROM constructors c JOIN (SELECT constructorId, SUM(wins) AS wins, COUNT(*) AS appearances FROM constructorStandings GROUP BY constructorId) cr ON c.constructorId = cr.constructorId GROUP BY c.nationality HAVING SUM(cr.wins) > 0"
+                    },
+                    {
+                        "db": "european_football_2",
+                        "sql": "SELECT c.name AS country, AVG(m.home_team_goal + m.away_team_goal) AS avg_total_goals FROM Country c JOIN League l ON l.country_id = c.id JOIN Match m ON m.league_id = l.id GROUP BY c.name"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT c.nationality, CAST(SUM(cs.wins) AS REAL) / COUNT(*) AS win_rate FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT co.name, AVG(m.home_team_goal + m.away_team_goal) AS avg_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nfrom scipy.stats import spearmanr\n\ncon1 = sqlite3.connect(\"dev/databases/formula_1/formula_1.sqlite\")\ndf1 = pd.read_sql_query(\n    \"SELECT c.nationality AS country, CAST(SUM(cr.wins) AS REAL) / SUM(cr.appearances) AS win_rate \"\n    \"FROM constructors c JOIN (SELECT constructorId, SUM(wins) AS wins, COUNT(*) AS appearances \"\n    \"FROM constructorStandings GROUP BY constructorId) cr ON c.constructorId = cr.constructorId \"\n    \"GROUP BY c.nationality HAVING SUM(cr.wins) > 0\", con1)\ncon1.close()\n\ncon2 = sqlite3.connect(\"dev/databases/european_football_2/european_football_2.sqlite\")\ndf2 = pd.read_sql_query(\n    \"SELECT c.name AS country, AVG(m.home_team_goal + m.away_team_goal) AS avg_total_goals \"\n    \"FROM Country c JOIN League l ON l.country_id = c.id JOIN Match m ON m.league_id = l.id \"\n    \"GROUP BY c.name\", con2)\ncon2.close()\n\nnat_to_country = {\n    \"British\": \"England\", \"Italian\": \"Italy\", \"German\": \"Germany\",\n    \"French\": \"France\", \"Spanish\": \"Spain\", \"Dutch\": \"Netherlands\",\n    \"Swiss\": \"Switzerland\", \"Scottish\": \"Scotland\", \"Belgian\": \"Belgium\",\n    \"Portuguese\": \"Portugal\", \"Polish\": \"Poland\",\n}\ndf1[\"country\"] = df1[\"country\"].map(nat_to_country)\ndf1 = df1.dropna(subset=[\"country\"])\n\nmerged = df1.merge(df2, on=\"country\", how=\"inner\")\nr, _ = spearmanr(merged[\"win_rate\"], merged[\"avg_total_goals\"])\nprint(json.dumps({\"spearman_r\": float(r)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "spearman_r": 0.7999999999999999
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "spearman_r": 0.7999999999999999
+                },
+                "gold_answer": {
+                    "spearman_r": 0.8
+                },
+                "correct": true,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 1009,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 17964
+                },
+                "cost_usd": 0.115045
+            }
+        ]
+    },
+    {
+        "task_id": 11,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "formula_1",
+                    "european_football_2"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "formula_1",
+                        "sql": "SELECT country, AVG(lat) AS avg_lat FROM circuits GROUP BY country"
+                    },
+                    {
+                        "db": "european_football_2",
+                        "sql": "SELECT c.name AS country, AVG(m.away_team_goal) AS avg_away_goals FROM Match m JOIN Country c ON m.country_id = c.id GROUP BY c.name"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT ci.country, AVG(ci.lat) AS avg_lat FROM circuits ci WHERE ci.lat IS NOT NULL GROUP BY ci.country",
+                            "matched": true
+                        },
+                        {
+                            "gold_sql": "SELECT co.name, AVG(m.away_team_goal) AS avg_away_goals FROM Match m JOIN Country co ON m.country_id = co.id WHERE m.away_team_goal IS NOT NULL GROUP BY co.name",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nfrom scipy.stats import pearsonr\n\nconn1 = sqlite3.connect(\"dev/databases/formula_1/formula_1.sqlite\")\ndf1 = pd.read_sql_query(\"SELECT country, AVG(lat) AS avg_lat FROM circuits GROUP BY country\", conn1)\nconn1.close()\n\nconn2 = sqlite3.connect(\"dev/databases/european_football_2/european_football_2.sqlite\")\ndf2 = pd.read_sql_query(\"SELECT c.name AS country, AVG(m.away_team_goal) AS avg_away_goals FROM Match m JOIN Country c ON m.country_id = c.id GROUP BY c.name\", conn2)\nconn2.close()\n\nmerged = df1.merge(df2, on=\"country\")\nr, _ = pearsonr(merged[\"avg_lat\"], merged[\"avg_away_goals\"])\nprint(json.dumps({\"r\": float(r)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "r": 0.6133798022493758
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "r": 0.6133798022493758
+                },
+                "gold_answer": {
+                    "r": 0.6134
+                },
+                "correct": true,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 496,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 17701
+                },
+                "cost_usd": 0.100905
+            }
+        ]
+    },
+    {
+        "task_id": 12,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "financial",
+                    "thrombosis_prediction"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "financial",
+                        "sql": "SELECT SUM(CASE WHEN status='D' THEN 1 ELSE 0 END) AS delinquent, SUM(CASE WHEN status IN ('C','D') THEN 1 ELSE 0 END) AS active_total FROM loan"
+                    },
+                    {
+                        "db": "thrombosis_prediction",
+                        "sql": "SELECT SUM(CASE WHEN e.Thrombosis >= 1 THEN 1 ELSE 0 END) AS thrombosis_cases, COUNT(*) AS hospitalized_total FROM Patient p JOIN Examination e ON p.ID = e.ID WHERE p.Admission = '+'"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT SUM(CASE WHEN status = 'D' THEN 1 ELSE 0 END) AS x1, COUNT(*) AS n1 FROM loan WHERE status IN ('C', 'D')",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT SUM(CASE WHEN e.Thrombosis >= 1 THEN 1 ELSE 0 END) AS x2, COUNT(*) AS n2 FROM Examination e JOIN Patient p ON e.ID = p.ID WHERE p.Admission = '+' AND e.Thrombosis IS NOT NULL",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport math\n\nqueries = [\n    {\n        \"db_path\": \"dev/databases/financial/financial.sqlite\",\n        \"sql\": \"SELECT SUM(CASE WHEN status='D' THEN 1 ELSE 0 END) AS delinquent, SUM(CASE WHEN status IN ('C','D') THEN 1 ELSE 0 END) AS active_total FROM loan\"\n    },\n    {\n        \"db_path\": \"dev/databases/thrombosis_prediction/thrombosis_prediction.sqlite\",\n        \"sql\": \"SELECT SUM(CASE WHEN e.Thrombosis >= 1 THEN 1 ELSE 0 END) AS thrombosis_cases, COUNT(*) AS hospitalized_total FROM Patient p JOIN Examination e ON p.ID = e.ID WHERE p.Admission = '+'\"\n    }\n]\n\nresults = []\nfor q in queries:\n    conn = sqlite3.connect(q[\"db_path\"])\n    cur = conn.cursor()\n    cur.execute(q[\"sql\"])\n    results.append(cur.fetchall())\n    conn.close()\n\nx1, n1 = results[0][0]\nx2, n2 = results[1][0]\n\np1 = x1 / n1\np2 = x2 / n2\np_pool = (x1 + x2) / (n1 + n2)\nse = math.sqrt(p_pool * (1 - p_pool) * (1/n1 + 1/n2))\nz = (p1 - p2) / se\n\nprint(json.dumps({\"p1\": p1, \"p2\": p2, \"z\": z}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "p1": 0.10044642857142858,
+                    "p2": 0.23333333333333334,
+                    "z": -2.263024715640641
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "p1": 0.10044642857142858,
+                    "p2": 0.23333333333333334,
+                    "z": -2.263024715640641
+                },
+                "gold_answer": {
+                    "p1": 0.1004,
+                    "p2": 0.2333,
+                    "z": -2.263
+                },
+                "correct": true,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 807,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 10467
+                },
+                "cost_usd": 0.07251
+            }
+        ]
+    },
+    {
+        "task_id": 13,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "formula_1",
+                    "european_football_2"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "formula_1",
+                        "sql": "SELECT c.nationality AS country, SUM(cs.points) AS total_points FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality"
+                    },
+                    {
+                        "db": "european_football_2",
+                        "sql": "SELECT co.name AS country, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT c.nationality, SUM(cs.points) AS total_points FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT co.name, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nfrom scipy.stats import pearsonr\n\nq1 = \"SELECT c.nationality AS country, SUM(cs.points) AS total_points FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality\"\nq2 = \"SELECT co.name AS country, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name\"\n\nconn1 = sqlite3.connect(\"dev/databases/formula_1/formula_1.sqlite\")\ndf1 = pd.read_sql_query(q1, conn1)\nconn1.close()\n\nconn2 = sqlite3.connect(\"dev/databases/european_football_2/european_football_2.sqlite\")\ndf2 = pd.read_sql_query(q2, conn2)\nconn2.close()\n\nnationality_to_country = {\n    \"British\": \"England\",\n    \"German\": \"Germany\",\n    \"Italian\": \"Italy\",\n    \"French\": \"France\",\n    \"Spanish\": \"Spain\",\n    \"Swiss\": \"Switzerland\",\n    \"Dutch\": \"Netherlands\",\n    \"Belgian\": \"Belgium\",\n    \"Irish\": \"Ireland\",\n    \"Portuguese\": \"Portugal\",\n    \"Scottish\": \"Scotland\",\n    \"Polish\": \"Poland\",\n}\n\ndf1[\"country\"] = df1[\"country\"].map(nationality_to_country)\ndf1 = df1.dropna(subset=[\"country\"])\n\nmerged = pd.merge(df1, df2, on=\"country\", how=\"inner\")\n\nr, _ = pearsonr(merged[\"total_points\"], merged[\"avg_home_goals\"])\nprint(json.dumps({\"r\": float(r)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "r": -0.4169793076768265
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "r": -0.4169793076768265
+                },
+                "gold_answer": {
+                    "r": -0.4127
+                },
+                "correct": true,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 804,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 17765
+                },
+                "cost_usd": 0.108925
+            }
+        ]
+    },
+    {
+        "task_id": 14,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "olympics",
+                    "world_development_indicators"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "olympics",
+                        "sql": "SELECT nr.region_name AS country, COUNT(*) AS medal_count FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id JOIN medal m ON ce.medal_id = m.id WHERE g.games_year = 2008 AND g.season = 'Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.region_name"
+                    },
+                    {
+                        "db": "world_development_indicators",
+                        "sql": "SELECT CountryName, ShortName, Value AS gdp_per_capita FROM Indicators i JOIN Country c ON i.CountryCode = c.CountryCode WHERE i.IndicatorCode = 'NY.GDP.PCAP.CD' AND i.Year = 2008"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2008 AND g.season = 'Summer' GROUP BY nr.region_name",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2008",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nimport numpy as np\nfrom scipy.stats import pearsonr\n\nconn1 = sqlite3.connect(\"dev/databases/olympics/olympics.sqlite\")\nmedals = pd.read_sql_query(\"\"\"\nSELECT nr.region_name AS country, COUNT(*) AS medal_count\nFROM competitor_event ce\nJOIN games_competitor gc ON ce.competitor_id = gc.id\nJOIN games g ON gc.games_id = g.id\nJOIN person_region pr ON gc.person_id = pr.person_id\nJOIN noc_region nr ON pr.region_id = nr.id\nJOIN medal m ON ce.medal_id = m.id\nWHERE g.games_year = 2008 AND g.season = 'Summer'\n  AND m.medal_name IN ('Gold','Silver','Bronze')\nGROUP BY nr.region_name\n\"\"\", conn1)\nconn1.close()\n\nconn2 = sqlite3.connect(\"dev/databases/world_development_indicators/world_development_indicators.sqlite\")\ngdp = pd.read_sql_query(\"\"\"\nSELECT CountryName, ShortName, Value AS gdp_per_capita\nFROM Indicators i\nJOIN Country c ON i.CountryCode = c.CountryCode\nWHERE i.IndicatorCode = 'NY.GDP.PCAP.CD' AND i.Year = 2008\n\"\"\", conn2)\nconn2.close()\n\nmapping = {\n    \"USA\": \"United States\",\n    \"UK\": \"United Kingdom\",\n    \"Russia\": \"Russian Federation\",\n    \"South Korea\": \"Korea, Rep.\",\n    \"Iran\": \"Iran, Islamic Rep.\",\n    \"Egypt\": \"Egypt, Arab Rep.\",\n    \"Venezuela\": \"Venezuela, RB\",\n    \"Kyrgyzstan\": \"Kyrgyz Republic\",\n    \"Slovakia\": \"Slovak Republic\",\n    \"Bahamas\": \"Bahamas, The\",\n    \"Ivory Coast\": \"Cote d'Ivoire\",\n}\n\nexclude = {\"Soviet Union\",\"East Germany\",\"West Germany\",\"Unified Team\",\"Yugoslavia\",\n           \"Czechoslovakia\",\"Serbia and Montenegro\",\"Taiwan\",\"North Korea\",\n           \"Individual Olympic Athletes\",\"Australasia\"}\n\nmedals = medals[~medals[\"country\"].isin(exclude)].copy()\nmedals[\"mapped\"] = medals[\"country\"].map(lambda x: mapping.get(x, x))\n\nmerged = medals.merge(gdp, left_on=\"mapped\", right_on=\"CountryName\", how=\"inner\")\nmerged = merged.dropna(subset=[\"gdp_per_capita\", \"medal_count\"])\n\nr, _ = pearsonr(merged[\"gdp_per_capita\"].astype(float), merged[\"medal_count\"].astype(float))\nprint(json.dumps({\"r\": float(r)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "r": 0.260771667049146
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "r": 0.260771667049146
+                },
+                "gold_answer": {
+                    "r": 0.2608
+                },
+                "correct": true,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 1371,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 13267
+                },
+                "cost_usd": 0.10061
+            }
+        ]
+    },
+    {
+        "task_id": 15,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "olympics",
+                    "world_development_indicators"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "olympics",
+                        "sql": "SELECT CASE nr.region_name WHEN 'USA' THEN 'United States' WHEN 'UK' THEN 'United Kingdom' WHEN 'Russia' THEN 'Russian Federation' WHEN 'South Korea' THEN 'Korea, Rep.' WHEN 'Iran' THEN 'Iran, Islamic Rep.' WHEN 'Egypt' THEN 'Egypt, Arab Rep.' WHEN 'Venezuela' THEN 'Venezuela, RB' WHEN 'Kyrgyzstan' THEN 'Kyrgyz Republic' WHEN 'Slovakia' THEN 'Slovak Republic' WHEN 'Bahamas' THEN 'Bahamas, The' WHEN 'Ivory Coast' THEN \"Cote d'Ivoire\" ELSE nr.region_name END AS country, COUNT(*) AS medal_count FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id JOIN medal m ON ce.medal_id = m.id WHERE g.games_year = 2012 AND g.season = 'Summer' AND m.medal_name IN ('Gold','Silver','Bronze') AND nr.region_name NOT IN ('Soviet Union','East Germany','West Germany','Unified Team','Yugoslavia','Czechoslovakia','Serbia and Montenegro','Taiwan','North Korea','Individual Olympic Athletes','Australasia') GROUP BY country"
+                    },
+                    {
+                        "db": "world_development_indicators",
+                        "sql": "SELECT CountryName AS country, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2012 AND g.season = 'Summer' GROUP BY nr.region_name",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nimport numpy as np\nfrom scipy import stats\n\nq1 = \"SELECT CASE nr.region_name WHEN 'USA' THEN 'United States' WHEN 'UK' THEN 'United Kingdom' WHEN 'Russia' THEN 'Russian Federation' WHEN 'South Korea' THEN 'Korea, Rep.' WHEN 'Iran' THEN 'Iran, Islamic Rep.' WHEN 'Egypt' THEN 'Egypt, Arab Rep.' WHEN 'Venezuela' THEN 'Venezuela, RB' WHEN 'Kyrgyzstan' THEN 'Kyrgyz Republic' WHEN 'Slovakia' THEN 'Slovak Republic' WHEN 'Bahamas' THEN 'Bahamas, The' WHEN 'Ivory Coast' THEN \\\"Cote d'Ivoire\\\" ELSE nr.region_name END AS country, COUNT(*) AS medal_count FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id JOIN medal m ON ce.medal_id = m.id WHERE g.games_year = 2012 AND g.season = 'Summer' AND m.medal_name IN ('Gold','Silver','Bronze') AND nr.region_name NOT IN ('Soviet Union','East Germany','West Germany','Unified Team','Yugoslavia','Czechoslovakia','Serbia and Montenegro','Taiwan','North Korea','Individual Olympic Athletes','Australasia') GROUP BY country\"\n\nq2 = \"SELECT CountryName AS country, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012\"\n\nconn1 = sqlite3.connect(\"dev/databases/olympics/olympics.sqlite\")\ndf1 = pd.read_sql_query(q1, conn1)\nconn1.close()\n\nconn2 = sqlite3.connect(\"dev/databases/world_development_indicators/world_development_indicators.sqlite\")\ndf2 = pd.read_sql_query(q2, conn2)\nconn2.close()\n\nmerged = df1.merge(df2, on=\"country\", how=\"inner\").dropna()\nslope, intercept, r, p, se = stats.linregress(merged[\"gdp_per_capita\"], merged[\"medal_count\"])\nprint(json.dumps({\"slope\": float(slope)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "slope": 0.0005376463472144132
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "slope": 0.0005376463472144132
+                },
+                "gold_answer": {
+                    "slope": 0.00053765
+                },
+                "correct": true,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 1667,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 13524
+                },
+                "cost_usd": 0.109295
+            }
+        ]
+    },
+    {
+        "task_id": 16,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "olympics",
+                    "world_development_indicators"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "olympics",
+                        "sql": "SELECT nr.region_name AS country, COUNT(ce.medal_id) AS medal_count FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person p ON gc.person_id = p.id JOIN person_region pr ON p.id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id JOIN medal m ON ce.medal_id = m.id WHERE g.games_year = 2012 AND g.season = 'Summer' AND m.medal_name IN ('Gold','Silver','Bronze') AND nr.region_name NOT IN ('Soviet Union','East Germany','West Germany','Unified Team','Yugoslavia','Czechoslovakia','Serbia and Montenegro','Taiwan','North Korea','Individual Olympic Athletes','Australasia') GROUP BY nr.region_name"
+                    },
+                    {
+                        "db": "world_development_indicators",
+                        "sql": "SELECT CountryName, CountryCode, IndicatorCode, Value FROM Indicators WHERE Year = 2012 AND IndicatorCode IN ('NY.GDP.PCAP.CD','SP.POP.TOTL')"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2012 AND g.season = 'Summer' GROUP BY nr.region_name",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT CountryName, Value AS population FROM Indicators WHERE IndicatorCode = 'SP.POP.TOTL' AND Year = 2012",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nimport numpy as np\n\n# Query 1: Olympic medals\nconn1 = sqlite3.connect(\"dev/databases/olympics/olympics.sqlite\")\nmedals = pd.read_sql_query(\"\"\"\nSELECT nr.region_name AS country, COUNT(ce.medal_id) AS medal_count \nFROM competitor_event ce \nJOIN games_competitor gc ON ce.competitor_id = gc.id \nJOIN games g ON gc.games_id = g.id \nJOIN person p ON gc.person_id = p.id \nJOIN person_region pr ON p.id = pr.person_id \nJOIN noc_region nr ON pr.region_id = nr.id \nJOIN medal m ON ce.medal_id = m.id \nWHERE g.games_year = 2012 AND g.season = 'Summer' \nAND m.medal_name IN ('Gold','Silver','Bronze') \nAND nr.region_name NOT IN ('Soviet Union','East Germany','West Germany','Unified Team','Yugoslavia','Czechoslovakia','Serbia and Montenegro','Taiwan','North Korea','Individual Olympic Athletes','Australasia') \nGROUP BY nr.region_name\n\"\"\", conn1)\nconn1.close()\n\n# Query 2: WDI\nconn2 = sqlite3.connect(\"dev/databases/world_development_indicators/world_development_indicators.sqlite\")\nwdi = pd.read_sql_query(\"\"\"\nSELECT CountryName, CountryCode, IndicatorCode, Value FROM Indicators \nWHERE Year = 2012 AND IndicatorCode IN ('NY.GDP.PCAP.CD','SP.POP.TOTL')\n\"\"\", conn2)\nconn2.close()\n\n# Apply country name mappings\nmapping = {\n    'USA': 'United States',\n    'UK': 'United Kingdom',\n    'Russia': 'Russian Federation',\n    'South Korea': 'Korea, Rep.',\n    'Iran': 'Iran, Islamic Rep.',\n    'Egypt': 'Egypt, Arab Rep.',\n    'Venezuela': 'Venezuela, RB',\n    'Kyrgyzstan': 'Kyrgyz Republic',\n    'Slovakia': 'Slovak Republic',\n    'Bahamas': 'Bahamas, The',\n    'Ivory Coast': \"Cote d'Ivoire\"\n}\nmedals['country'] = medals['country'].replace(mapping)\n\ngdp = wdi[wdi['IndicatorCode'] == 'NY.GDP.PCAP.CD'][['CountryName', 'Value']].rename(columns={'Value': 'gdp_pc'})\npop = wdi[wdi['IndicatorCode'] == 'SP.POP.TOTL'][['CountryName', 'Value']].rename(columns={'Value': 'pop'})\n\ndf = medals.merge(gdp, left_on='country', right_on='CountryName', how='inner')\ndf = df.merge(pop, left_on='country', right_on='CountryName', how='inner')\ndf = df.dropna(subset=['gdp_pc', 'pop', 'medal_count'])\n\nX = np.column_stack([np.ones(len(df)), df['gdp_pc'].values, df['pop'].values])\ny = df['medal_count'].values\ncoef, *_ = np.linalg.lstsq(X, y, rcond=None)\n\nresult = {\"beta_0\": float(coef[0]), \"beta_1\": float(coef[1]), \"beta_2\": float(coef[2])}\nprint(json.dumps(result))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "beta_0": 5.554648764541151,
+                    "beta_1": 0.0006213737855200838,
+                    "beta_2": 7.29287749369899e-08
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "beta_0": 5.554648764541151,
+                    "beta_1": 0.0006213737855200838,
+                    "beta_2": 7.29287749369899e-08
+                },
+                "gold_answer": {
+                    "beta_0": 5.5546,
+                    "beta_1": 0.0006213738,
+                    "beta_2": 7.29e-08
+                },
+                "correct": true,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 1720,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 13473
+                },
+                "cost_usd": 0.110365
+            }
+        ]
+    },
+    {
+        "task_id": 17,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "chicago_crime",
+                    "social_media"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "chicago_crime",
+                        "sql": "SELECT CASE CAST(strftime('%w', substr('0000'||substr(date,1,instr(date,'/')-1),-4,4)||'-'||substr('00'||substr(date,instr(date,'/')+1),-2,2)||'-01') AS INTEGER) WEEKDAY FROM Crime LIMIT 0"
+                    },
+                    {
+                        "db": "chicago_crime",
+                        "sql": "WITH parsed AS (SELECT date, substr(date, 1, instr(date,'/')-1) AS m_str, substr(date, instr(date,'/')+1, instr(substr(date, instr(date,'/')+1), '/')-1) AS d_str, substr(date, instr(date,'/')+instr(substr(date, instr(date,'/')+1), '/')+1, 4) AS y_str FROM Crime), iso AS (SELECT y_str || '-' || substr('00'||m_str,-2,2) || '-' || substr('00'||d_str,-2,2) AS iso_date FROM parsed) SELECT CASE CAST(strftime('%w', iso_date) AS INTEGER) WHEN 0 THEN 'Sunday' WHEN 1 THEN 'Monday' WHEN 2 THEN 'Tuesday' WHEN 3 THEN 'Wednesday' WHEN 4 THEN 'Thursday' WHEN 5 THEN 'Friday' WHEN 6 THEN 'Saturday' END AS weekday, COUNT(*) AS crime_count FROM iso GROUP BY weekday"
+                    },
+                    {
+                        "db": "social_media",
+                        "sql": "SELECT Weekday AS weekday, AVG(Sentiment) AS avg_sentiment FROM twitter GROUP BY Weekday"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_retry_0",
+                "issues": [
+                    "db=chicago_crime sql=SELECT CASE CAST(strftime('%w', substr('0000'||substr(date,1,instr(date,'/')-1), error=near \"WEEKDAY\": syntax error"
+                ]
+            },
+            {
+                "step": "sql_gen_attempt_1",
+                "sqls": [
+                    {
+                        "db": "chicago_crime",
+                        "sql": "SELECT CASE CAST(strftime('%w', substr(date, length(date) - instr(substr(date,1,instr(date,' ')-1),'/')*0 - 0, 0) || (CASE WHEN substr(date, instr(date,'/')+1, instr(substr(date, instr(date,'/')+1), '/')-1) GLOB '[0-9]' THEN '0' || substr(date, instr(date,'/')+1, instr(substr(date, instr(date,'/')+1), '/')-1) ELSE substr(date, instr(date,'/')+1, instr(substr(date, instr(date,'/')+1), '/')-1) END))) AS INT) WHEN 0 THEN 'Sunday' WHEN 1 THEN 'Monday' WHEN 2 THEN 'Tuesday' WHEN 3 THEN 'Wednesday' WHEN 4 THEN 'Thursday' WHEN 5 THEN 'Friday' WHEN 6 THEN 'Saturday' END AS weekday, COUNT(*) AS crime_count FROM Crime GROUP BY weekday"
+                    },
+                    {
+                        "db": "social_media",
+                        "sql": "SELECT Weekday AS weekday, AVG(Sentiment) AS avg_sentiment FROM twitter GROUP BY Weekday"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_retry_1",
+                "issues": [
+                    "db=chicago_crime sql=SELECT CASE CAST(strftime('%w', substr(date, length(date) - instr(substr(date,1, error=near \")\": syntax error"
+                ]
+            },
+            {
+                "step": "sql_gen_attempt_2",
+                "sqls": [
+                    {
+                        "db": "chicago_crime",
+                        "sql": "SELECT CASE CAST(strftime('%w', substr(d, -4) || '-' || substr('00' || substr(d, 1, instr(d, '/') - 1), -2) || '-' || substr('00' || substr(d, instr(d, '/') + 1, instr(substr(d, instr(d, '/') + 1), '/') - 1), -2)) AS INTEGER) WHEN 0 THEN 'Sunday' WHEN 1 THEN 'Monday' WHEN 2 THEN 'Tuesday' WHEN 3 THEN 'Wednesday' WHEN 4 THEN 'Thursday' WHEN 5 THEN 'Friday' WHEN 6 THEN 'Saturday' END AS weekday, COUNT(*) AS crime_count FROM (SELECT substr(date, 1, instr(date, ' ') - 1) AS d FROM Crime) GROUP BY weekday"
+                    },
+                    {
+                        "db": "social_media",
+                        "sql": "SELECT Weekday AS weekday, AVG(Sentiment) AS avg_sentiment FROM twitter GROUP BY Weekday"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT strftime('%w', SUBSTR(date, INSTR(date,'/')+INSTR(SUBSTR(date,INSTR(date,'/')+1),'/')+1, 4) || '-' || PRINTF('%02d', CAST(SUBSTR(date, 1, INSTR(date,'/')-1) AS INT)) || '-' || PRINTF('%02d', CAST(SUBSTR(SUBSTR(date,INSTR(date,'/')+1), 1, INSTR(SUBSTR(date,INSTR(date,'/')+1),'/')-1) AS INT))) AS dow, COUNT(*) AS crime_count FROM Crime GROUP BY dow",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT Weekday, AVG(Sentiment) AS avg_sentiment FROM twitter GROUP BY Weekday",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nimport numpy as np\n\nq1 = \"SELECT CASE CAST(strftime('%w', substr(d, -4) || '-' || substr('00' || substr(d, 1, instr(d, '/') - 1), -2) || '-' || substr('00' || substr(d, instr(d, '/') + 1, instr(substr(d, instr(d, '/') + 1), '/') - 1), -2)) AS INTEGER) WHEN 0 THEN 'Sunday' WHEN 1 THEN 'Monday' WHEN 2 THEN 'Tuesday' WHEN 3 THEN 'Wednesday' WHEN 4 THEN 'Thursday' WHEN 5 THEN 'Friday' WHEN 6 THEN 'Saturday' END AS weekday, COUNT(*) AS crime_count FROM (SELECT substr(date, 1, instr(date, ' ') - 1) AS d FROM Crime) GROUP BY weekday\"\nq2 = \"SELECT Weekday AS weekday, AVG(Sentiment) AS avg_sentiment FROM twitter GROUP BY Weekday\"\n\nconn1 = sqlite3.connect(\"dev/databases/chicago_crime/chicago_crime.sqlite\")\ndf1 = pd.read_sql_query(q1, conn1)\nconn1.close()\n\nconn2 = sqlite3.connect(\"dev/databases/social_media/social_media.sqlite\")\ndf2 = pd.read_sql_query(q2, conn2)\nconn2.close()\n\ndf1['weekday'] = df1['weekday'].str.strip().str.capitalize()\ndf2['weekday'] = df2['weekday'].astype(str).str.strip().str.capitalize()\n\nmerged = df1.merge(df2, on='weekday', how='inner')\nr = np.corrcoef(merged['crime_count'].astype(float), merged['avg_sentiment'].astype(float))[0, 1]\nprint(json.dumps({\"r\": float(r)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "r": 0.4190328900070738
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "r": 0.4190328900070738
+                },
+                "gold_answer": {
+                    "r": 0.419
+                },
+                "correct": true,
+                "sql_retries": 2,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 2321,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 18031
+                },
+                "cost_usd": 0.14818
+            }
+        ]
+    },
+    {
+        "task_id": 18,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "professional_basketball",
+                    "world_development_indicators"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "professional_basketball",
+                        "sql": "SELECT p.birthCountry, COUNT(DISTINCT p.playerID) AS player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL AND p.birthCountry <> '' GROUP BY p.birthCountry"
+                    },
+                    {
+                        "db": "world_development_indicators",
+                        "sql": "SELECT CountryCode, CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2000 AND Value IS NOT NULL"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT p.birthCountry, COUNT(DISTINCT p.playerID) AS player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL GROUP BY p.birthCountry ORDER BY player_count DESC",
+                            "matched": true
+                        },
+                        {
+                            "gold_sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2000",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nfrom scipy.stats import spearmanr\n\n# Query 1: NBA players by birth country\nconn1 = sqlite3.connect(\"dev/databases/professional_basketball/professional_basketball.sqlite\")\nplayers_df = pd.read_sql_query(\n    \"SELECT p.birthCountry, COUNT(DISTINCT p.playerID) AS player_count \"\n    \"FROM players p JOIN players_teams pt ON p.playerID = pt.playerID \"\n    \"WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL AND p.birthCountry <> '' \"\n    \"GROUP BY p.birthCountry\",\n    conn1\n)\nconn1.close()\n\n# Query 2: GDP per capita 2000\nconn2 = sqlite3.connect(\"dev/databases/world_development_indicators/world_development_indicators.sqlite\")\ngdp_df = pd.read_sql_query(\n    \"SELECT CountryCode, CountryName, Value AS gdp_per_capita FROM Indicators \"\n    \"WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2000 AND Value IS NOT NULL\",\n    conn2\n)\nconn2.close()\n\n# IOC 3-letter to WDI country name mapping\nioc_to_wdi = {\n    \"USA\": \"United States\",\n    \"CAN\": \"Canada\",\n    \"GBR\": \"United Kingdom\",\n    \"FRA\": \"France\",\n    \"GER\": \"Germany\",\n    \"ESP\": \"Spain\",\n    \"ITA\": \"Italy\",\n    \"GRE\": \"Greece\",\n    \"CRO\": \"Croatia\",\n    \"SRB\": \"Serbia\",\n    \"SLO\": \"Slovenia\",\n    \"LTU\": \"Lithuania\",\n    \"LAT\": \"Latvia\",\n    \"RUS\": \"Russian Federation\",\n    \"UKR\": \"Ukraine\",\n    \"POL\": \"Poland\",\n    \"CZE\": \"Czech Republic\",\n    \"TUR\": \"Turkey\",\n    \"ISR\": \"Israel\",\n    \"BRA\": \"Brazil\",\n    \"ARG\": \"Argentina\",\n    \"MEX\": \"Mexico\",\n    \"DOM\": \"Dominican Republic\",\n    \"PUR\": \"Puerto Rico\",\n    \"VEN\": \"Venezuela, RB\",\n    \"JAM\": \"Jamaica\",\n    \"HAI\": \"Haiti\",\n    \"CHN\": \"China\",\n    \"JPN\": \"Japan\",\n    \"KOR\": \"Korea, Rep.\",\n    \"PHI\": \"Philippines\",\n    \"AUS\": \"Australia\",\n    \"NZL\": \"New Zealand\",\n    \"NGR\": \"Nigeria\",\n    \"SEN\": \"Senegal\",\n    \"CMR\": \"Cameroon\",\n    \"RSA\": \"South Africa\",\n    \"EGY\": \"Arab Republic of Egypt\",\n    \"SUD\": \"Sudan\",\n    \"CGO\": \"Congo, Rep.\",\n    \"COD\": \"Congo, Dem. Rep.\",\n    \"CIV\": \"Cote d'Ivoire\",\n    \"GHA\": \"Ghana\",\n    \"MLI\": \"Mali\",\n    \"TAN\": \"Tanzania\",\n    \"GAB\": \"Gabon\",\n    \"AUT\": \"Austria\",\n    \"BEL\": \"Belgium\",\n    \"NED\": \"Netherlands\",\n    \"SUI\": \"Switzerland\",\n    \"SWE\": \"Sweden\",\n    \"DEN\": \"Denmark\",\n    \"FIN\": \"Finland\",\n    \"NOR\": \"Norway\",\n    \"ISL\": \"Iceland\",\n    \"IRL\": \"Ireland\",\n    \"POR\": \"Portugal\",\n    \"HUN\": \"Hungary\",\n    \"ROU\": \"Romania\",\n    \"BUL\": \"Bulgaria\",\n    \"BIH\": \"Bosnia and Herzegovina\",\n    \"MKD\": \"Macedonia, FYR\",\n    \"MNE\": \"Montenegro\",\n    \"GEO\": \"Georgia\",\n    \"ARM\": \"Armenia\",\n    \"AZE\": \"Azerbaijan\",\n    \"KAZ\": \"Kazakhstan\",\n    \"UZB\": \"Uzbekistan\",\n    \"IRI\": \"Iran, Islamic Rep.\",\n    \"LIB\": \"Lebanon\",\n    \"SYR\": \"Syrian Arab Republic\",\n    \"IRQ\": \"Iraq\",\n    \"KSA\": \"Saudi Arabia\",\n    \"UAE\": \"United Arab Emirates\",\n    \"IND\": \"India\",\n    \"PAK\": \"Pakistan\",\n    \"BAN\": \"Bangladesh\",\n    \"SRI\": \"Sri Lanka\",\n    \"INA\": \"Indonesia\",\n    \"MAS\": \"Malaysia\",\n    \"SIN\": \"Singapore\",\n    \"THA\": \"Thailand\",\n    \"VIE\": \"Vietnam\",\n    \"TPE\": \"Taiwan\",\n    \"HKG\": \"Hong Kong SAR, China\",\n    \"CUB\": \"Cuba\",\n    \"PAN\": \"Panama\",\n    \"CRC\": \"Costa Rica\",\n    \"URU\": \"Uruguay\",\n    \"CHI\": \"Chile\",\n    \"COL\": \"Colombia\",\n    \"PER\": \"Peru\",\n    \"ECU\": \"Ecuador\",\n    \"BOL\": \"Bolivia\",\n    \"PAR\": \"Paraguay\",\n    \"TRI\": \"Trinidad and Tobago\",\n    \"BAH\": \"Bahamas, The\",\n    \"BAR\": \"Barbados\",\n    \"SCG\": None,\n    \"YUG\": None,\n    \"URS\": None,\n    \"TCH\": None,\n    \"GDR\": None,\n    \"FRG\": None,\n}\n\nplayers_df[\"wdi_name\"] = players_df[\"birthCountry\"].map(ioc_to_wdi)\nmerged = players_df.dropna(subset=[\"wdi_name\"]).merge(\n    gdp_df, left_on=\"wdi_name\", right_on=\"CountryName\", how=\"inner\"\n)\n\nr, _ = spearmanr(merged[\"player_count\"], merged[\"gdp_per_capita\"])\nprint(json.dumps({\"spearman_r\": float(r)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "spearman_r": 0.04945196219825836
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "spearman_r": 0.04945196219825836
+                },
+                "gold_answer": {
+                    "spearman_r": 0.0474
+                },
+                "correct": true,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 2329,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 16991
+                },
+                "cost_usd": 0.14318
+            }
+        ]
+    },
+    {
+        "task_id": 19,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "professional_basketball",
+                    "olympics"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "professional_basketball",
+                        "sql": "SELECT p.birthCountry AS country, COUNT(DISTINCT p.playerID) AS nba_players FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL AND p.birthCountry != '' GROUP BY p.birthCountry"
+                    },
+                    {
+                        "db": "olympics",
+                        "sql": "SELECT nr.noc AS country, COUNT(*) AS medal_count FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id JOIN medal m ON ce.medal_id = m.id WHERE g.games_year = 2000 AND g.season = 'Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.noc"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT p.birthCountry, COUNT(DISTINCT p.playerID) AS player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL GROUP BY p.birthCountry ORDER BY player_count DESC",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2000 AND g.season = 'Summer' GROUP BY nr.region_name",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nimport numpy as np\nfrom scipy.stats import pearsonr\n\nconn1 = sqlite3.connect(\"dev/databases/professional_basketball/professional_basketball.sqlite\")\ndf1 = pd.read_sql_query(\n    \"SELECT p.birthCountry AS country, COUNT(DISTINCT p.playerID) AS nba_players \"\n    \"FROM players p JOIN players_teams pt ON p.playerID = pt.playerID \"\n    \"WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL AND p.birthCountry != '' \"\n    \"GROUP BY p.birthCountry\",\n    conn1,\n)\nconn1.close()\n\nconn2 = sqlite3.connect(\"dev/databases/olympics/olympics.sqlite\")\ndf2 = pd.read_sql_query(\n    \"SELECT nr.noc AS country, COUNT(*) AS medal_count \"\n    \"FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id \"\n    \"JOIN games g ON gc.games_id = g.id \"\n    \"JOIN person_region pr ON gc.person_id = pr.person_id \"\n    \"JOIN noc_region nr ON pr.region_id = nr.id \"\n    \"JOIN medal m ON ce.medal_id = m.id \"\n    \"WHERE g.games_year = 2000 AND g.season = 'Summer' \"\n    \"AND m.medal_name IN ('Gold','Silver','Bronze') \"\n    \"GROUP BY nr.noc\",\n    conn2,\n)\nconn2.close()\n\nmerged = pd.merge(df1, df2, on=\"country\", how=\"inner\")\nr, _ = pearsonr(merged[\"nba_players\"], merged[\"medal_count\"])\nprint(json.dumps({\"r\": float(r)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "r": 0.598216004397693
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "r": 0.598216004397693
+                },
+                "gold_answer": {
+                    "r": 0.5893
+                },
+                "correct": true,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 1037,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 13890
+                },
+                "cost_usd": 0.095375
+            }
+        ]
+    },
+    {
+        "task_id": 20,
+        "steps": [
+            {
+                "step": "selector",
+                "selected_dbs": [
+                    "olympics",
+                    "world_development_indicators"
+                ],
+                "error": null
+            },
+            {
+                "step": "sql_gen_attempt_0",
+                "sqls": [
+                    {
+                        "db": "world_development_indicators",
+                        "sql": "SELECT ShortName, TableName, IncomeGroup FROM Country WHERE IncomeGroup LIKE 'High income%' OR IncomeGroup = 'Low income' OR IncomeGroup = 'Lower middle income'"
+                    },
+                    {
+                        "db": "olympics",
+                        "sql": "SELECT nr.region_name, COUNT(ce.medal_id) AS medal_count FROM noc_region nr LEFT JOIN person_region pr ON pr.region_id = nr.id LEFT JOIN games_competitor gc ON gc.person_id = pr.person_id LEFT JOIN competitor_event ce ON ce.competitor_id = gc.id AND ce.medal_id IN (SELECT id FROM medal WHERE medal_name IN ('Gold','Silver','Bronze')) GROUP BY nr.region_name"
+                    }
+                ],
+                "error": null
+            },
+            {
+                "step": "intermediate_sql_check",
+                "check": {
+                    "available": true,
+                    "all_matched": false,
+                    "details": [
+                        {
+                            "gold_sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) GROUP BY nr.region_name",
+                            "matched": false
+                        },
+                        {
+                            "gold_sql": "SELECT ShortName, IncomeGroup FROM Country WHERE IncomeGroup IS NOT NULL AND IncomeGroup != ''",
+                            "matched": false
+                        }
+                    ]
+                },
+                "error": null
+            },
+            {
+                "step": "result_gen_code",
+                "code": "import sqlite3\nimport json\nimport pandas as pd\nfrom scipy import stats\n\nwdi_path = \"dev/databases/world_development_indicators/world_development_indicators.sqlite\"\noly_path = \"dev/databases/olympics/olympics.sqlite\"\n\nconn1 = sqlite3.connect(wdi_path)\nwdi = pd.read_sql_query(\n    \"SELECT ShortName, TableName, IncomeGroup FROM Country WHERE IncomeGroup LIKE 'High income%' OR IncomeGroup = 'Low income' OR IncomeGroup = 'Lower middle income'\",\n    conn1\n)\nconn1.close()\n\nconn2 = sqlite3.connect(oly_path)\noly = pd.read_sql_query(\n    \"SELECT nr.region_name, COUNT(ce.medal_id) AS medal_count FROM noc_region nr LEFT JOIN person_region pr ON pr.region_id = nr.id LEFT JOIN games_competitor gc ON gc.person_id = pr.person_id LEFT JOIN competitor_event ce ON ce.competitor_id = gc.id AND ce.medal_id IN (SELECT id FROM medal WHERE medal_name IN ('Gold','Silver','Bronze')) GROUP BY nr.region_name\",\n    conn2\n)\nconn2.close()\n\noly['region_lower'] = oly['region_name'].str.lower()\nwdi['short_lower'] = wdi['ShortName'].str.lower()\nwdi['table_lower'] = wdi['TableName'].str.lower()\n\nmerged = wdi.merge(oly, left_on='short_lower', right_on='region_lower', how='inner')\nmissing = wdi[~wdi['short_lower'].isin(merged['short_lower'])]\nmerged2 = missing.merge(oly, left_on='table_lower', right_on='region_lower', how='inner')\ncombined = pd.concat([merged, merged2], ignore_index=True)\n\ndef grp(ig):\n    if ig.startswith('High income'):\n        return 'high'\n    if ig in ('Low income', 'Lower middle income'):\n        return 'low'\n    return None\n\ncombined['grp'] = combined['IncomeGroup'].apply(grp)\nhigh = combined[combined['grp'] == 'high']['medal_count'].astype(float).values\nlow = combined[combined['grp'] == 'low']['medal_count'].astype(float).values\n\nt, p = stats.ttest_ind(high, low, equal_var=False)\nprint(json.dumps({\"t\": float(t), \"p\": float(p)}))",
+                "error": null
+            },
+            {
+                "step": "result_gen",
+                "model_answer": {
+                    "t": 4.552440564571652,
+                    "p": 2.609895360344695e-05
+                },
+                "error": null
+            },
+            {
+                "step": "final",
+                "model_answer": {
+                    "t": 4.552440564571652,
+                    "p": 2.609895360344695e-05
+                },
+                "gold_answer": {
+                    "t": 4.0167,
+                    "p": 0.0002
+                },
+                "correct": false,
+                "sql_retries": 0,
+                "error": null,
+                "token_usage": {
+                    "cache_read_input_tokens": 0,
+                    "output_tokens": 1207,
+                    "cache_creation_input_tokens": 0,
+                    "input_tokens": 12638
+                },
+                "cost_usd": 0.093365
+            }
+        ]
+    }
+]
