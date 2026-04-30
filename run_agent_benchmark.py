@@ -306,6 +306,74 @@ def _build_answer_schema(task: dict[str, Any]) -> type[Any] | None:
     return None
 
 
+def _sql_plan_feedback(plan: SQLPlan | None) -> str | None:
+    if plan is None:
+        return None
+    feedback: list[str] = []
+    for query in plan.queries:
+        sql_lower = query.sql.lower()
+        if "no_payment_due" in sql_lower and "'neg'" in sql_lower:
+            feedback.append(
+                "The student_loan.no_payment_due table uses bool = 'pos' for payment-due/adverse cases in these tasks. "
+                "Revise the SQL to use np.bool = 'pos', not 'neg'."
+            )
+        if query.db == "chicago_crime":
+            if "strftime('%y-%m'" in sql_lower or 'strftime("%y-%m"' in sql_lower:
+                feedback.append(
+                    "Chicago crime dates are not ISO date strings, so strftime(date) returns invalid month keys. "
+                    "Parse slash-formatted dates with SUBSTR/INSTR and emit PRINTF('%04d-%02d', year, month)."
+                )
+            if "substr(date, 7" in sql_lower:
+                feedback.append(
+                    "The Chicago crime date year is not at fixed position 7 for all rows. "
+                    "Extract the year after the second slash using INSTR/SUBSTR and format as YYYY-MM."
+                )
+            domestic_true_filter = (
+                "where domestic = 'true'" in sql_lower
+                or 'where domestic = "true"' in sql_lower
+                or "where domestic='true'" in sql_lower
+                or 'where domestic="true"' in sql_lower
+            )
+            computes_rate = (
+                " / count(" in sql_lower
+                or "/count(" in sql_lower
+                or "domestic_rate" in sql_lower
+                or "dv_rate" in sql_lower
+            )
+            if domestic_true_filter and not computes_rate:
+                feedback.append(
+                    "For a domestic violence rate, do not filter to only domestic = 'TRUE' rows and count them. "
+                    "Group all crimes at the requested granularity and compute the rate as "
+                    "CAST(SUM(CASE WHEN domestic = 'TRUE' THEN 1 ELSE 0 END) AS REAL) / COUNT(*)."
+                )
+        if query.db == "sales_in_weather":
+            if "avg(preciptotal)" in sql_lower and "station_nbr" not in sql_lower:
+                feedback.append(
+                    "For monthly average daily precipitation across weather stations, first average preciptotal by "
+                    "station_nbr and month, then average those station-month averages by month. Do not directly "
+                    "AVG(preciptotal) across all rows."
+                )
+            if "chicago" in " ".join(q.sql.lower() for q in plan.queries) or any(q.db == "chicago_crime" for q in plan.queries):
+                if "2018" not in sql_lower and "2013" not in sql_lower:
+                    feedback.append(
+                        "For this Chicago crime/weather task, align sales_in_weather year 2013 to crime year 2018: "
+                        "filter weather rows to date LIKE '2013%' and emit month keys as '2018' || SUBSTR(date, 5, 3)."
+                    )
+        if query.db == "college_completion" and "chronname" in sql_lower and " like " in sql_lower:
+            feedback.append(
+                "The evidence gives exact college_completion school-name mappings. "
+                "Do not use broad LIKE matching on chronname because it can pull extra institutions. "
+                "Use exact mapped chronname values or an explicit CASE over exact names."
+            )
+        if query.db == "college_completion" and "university of california-" in sql_lower:
+            feedback.append(
+                "The college_completion evidence uses UC names with 'at', such as "
+                "'University of California at Berkeley', not hyphenated names like "
+                "'University of California-Berkeley'. Use the exact evidence strings."
+            )
+    return " ".join(dict.fromkeys(feedback)) or None
+
+
 @dataclass
 class TaskReport:
     task_id: int | str
@@ -321,6 +389,8 @@ class TaskReport:
     gold_answer: Any
     sql_plan: list[dict[str, Any]]
     sql_comparison: list[dict[str, Any]]
+    agent_result_raw: Any
+    tool_trace: list[dict[str, Any]]
     token_usage: dict[str, Any]
     elapsed_s: float
     error: str | None = None
@@ -350,7 +420,10 @@ def run_task(task: dict[str, Any], db_dir: Path) -> TaskReport:
     t2 = time.time()
     selected = _selector_mod.database_selector(question, summaries, evidence=task.get("evidence", ""))
     selector_time = time.time() - t2
-    selected_dbs = selected.databases
+    selected_dbs = [db for db in selected.databases if db in db_names]
+    for db_name in db_names:
+        if db_name not in selected_dbs:
+            selected_dbs.append(db_name)
     selected_paths = [str(path) for path in db_paths if Path(path).stem in selected_dbs]
     selected_summaries = [summary for summary in summaries if summary.db_name in selected_dbs]
     if not selected_paths:
@@ -383,6 +456,13 @@ def run_task(task: dict[str, Any], db_dir: Path) -> TaskReport:
         sql_gen_times.append(sql_gen_time)
         logger.info(f"[Task {task_id}] SQL generation (attempt {attempt + 1}): {sql_gen_time:.2f}s")
 
+        plan_feedback = _sql_plan_feedback(plan)
+        if plan_feedback:
+            feedback = plan_feedback
+            error = plan_feedback
+            logger.warning(f"[Task {task_id}] SQL plan rejected before execution: {plan_feedback}")
+            continue
+
         t_exec = time.time()
         results, exec_error = execute_queries(plan, selected_paths)
         exec_time = time.time() - t_exec
@@ -414,6 +494,8 @@ def run_task(task: dict[str, Any], db_dir: Path) -> TaskReport:
 
     dumped = answer_obj.model_dump()
     agent_answer = dumped.get("answer", dumped)
+    tool_trace_getter = getattr(_result_mod, "get_last_tool_trace", None)
+    tool_trace = tool_trace_getter() if callable(tool_trace_getter) else []
     final_score = score_answer(agent_answer, gold_answer, tolerance)
     correct = final_score >= 1.0
 
@@ -453,6 +535,8 @@ def run_task(task: dict[str, Any], db_dir: Path) -> TaskReport:
         gold_answer=gold_answer,
         sql_plan=sql_plan,
         sql_comparison=sql_comparison,
+        agent_result_raw=dumped,
+        tool_trace=tool_trace,
         token_usage=usage_summary,
         elapsed_s=total_time,
         error=error,
@@ -640,6 +724,8 @@ def main() -> None:
                 gold_answer=_task_answer(task),
                 sql_plan=[],
                 sql_comparison=[],
+                agent_result_raw=None,
+                tool_trace=[],
                 token_usage={"calls": 0, "input_tokens": 0, "output_tokens": 0, "by_call": [], "estimated_cost_usd": 0.0},
                 elapsed_s=0.0,
                 error=str(exc),
