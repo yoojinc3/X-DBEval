@@ -21,6 +21,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = SCRIPT_DIR.parent
@@ -54,7 +58,12 @@ _PRICING: dict[str, tuple[float, float]] = {
     "claude-haiku-4-5-20251001": (0.80, 4.00),
     "claude-sonnet-4-5": (3.00, 15.00),
     "claude-sonnet-4-5-20251001": (3.00, 15.00),
+    "claude-opus-4-7": (5.00, 25.00),
 }
+
+# Per-agent model overrides: set to None to use each module's internal default.
+MODEL_SQL_OVERRIDE    = "claude-opus-4-7"
+MODEL_RESULT_OVERRIDE = "claude-opus-4-7"
 
 _thread_local = threading.local()
 _print_lock = threading.Lock()
@@ -71,44 +80,51 @@ def _cost_usd(model: str, inp: int, out: int) -> float:
     return (inp * in_rate + out * out_rate) / 1_000_000
 
 
-def _tracked_call_structured[T: Any](
-    model: str,
-    system: str,
-    user: str,
-    response_model: type[T],
-    max_tokens: int = 2048,
-) -> T:
-    t_start = time.time()
-    schema = response_model.model_json_schema()
-    response = _llm_mod.get_client().messages.create(
-        model=model,
-        max_tokens=max_tokens,
-        system=system,
-        tools=[{
-            "name": "submit_answer",
-            "description": f"Submit a validated {response_model.__name__} object.",
-            "input_schema": schema,
-        }],
-        tool_choice={"type": "tool", "name": "submit_answer"},
-        messages=[{"role": "user", "content": user}],
-    )
-    elapsed = time.time() - t_start
-    _get_task_usage().append({
-        "model": model,
-        "input": response.usage.input_tokens,
-        "output": response.usage.output_tokens,
-        "elapsed_s": elapsed,
-    })
-    logger.debug(
-        f"LLM call ({response_model.__name__}): {elapsed:.2f}s | "
-        f"{response.usage.input_tokens} in, {response.usage.output_tokens} out"
-    )
-    tool_use = next(block for block in response.content if block.type == "tool_use")
-    return response_model.model_validate(tool_use.input)
+def _make_call_structured(override_model: str | None = None):
+    """Return a call_structured replacement that optionally forces a specific model."""
+    def _call[T: Any](
+        model: str,
+        system: str,
+        user: str,
+        response_model: type[T],
+        max_tokens: int = 2048,
+    ) -> T:
+        actual_model = override_model if override_model is not None else model
+        t_start = time.time()
+        schema = response_model.model_json_schema()
+        response = _llm_mod.get_client().messages.create(
+            model=actual_model,
+            max_tokens=max_tokens,
+            system=system,
+            tools=[{
+                "name": "submit_answer",
+                "description": f"Submit a validated {response_model.__name__} object.",
+                "input_schema": schema,
+            }],
+            tool_choice={"type": "tool", "name": "submit_answer"},
+            messages=[{"role": "user", "content": user}],
+        )
+        elapsed = time.time() - t_start
+        _get_task_usage().append({
+            "model": actual_model,
+            "input": response.usage.input_tokens,
+            "output": response.usage.output_tokens,
+            "elapsed_s": elapsed,
+        })
+        logger.debug(
+            f"LLM call ({response_model.__name__}): {elapsed:.2f}s | "
+            f"{response.usage.input_tokens} in, {response.usage.output_tokens} out"
+        )
+        tool_use = next(block for block in response.content if block.type == "tool_use")
+        return response_model.model_validate(tool_use.input)
+    return _call
 
 
-for _mod in (_meta_mod, _selector_mod, _sql_mod, _result_mod):
-    _mod.call_structured = _tracked_call_structured  # type: ignore[attr-defined]
+# Metadata and selector use their module defaults; SQL gen and result gen use opus.
+_meta_mod.call_structured     = _make_call_structured()                   # type: ignore[attr-defined]
+_selector_mod.call_structured = _make_call_structured()                   # type: ignore[attr-defined]
+_sql_mod.call_structured      = _make_call_structured(MODEL_SQL_OVERRIDE)    # type: ignore[attr-defined]
+_result_mod.call_structured   = _make_call_structured(MODEL_RESULT_OVERRIDE) # type: ignore[attr-defined]
 
 
 def _numeric_close(a: Any, b: Any, tol: float) -> bool:
