@@ -76,16 +76,16 @@
         ],
         "analysis": "Step 1: Compute mh_rate per gender x age_group from survey. Step 2: Within each gender, compute median mh_rate across its 3 age groups. Classify each age group as high-burden (rate > median) or low-burden. Step 3: Map Male to M, Female to F. For each patient in synthea, assign high/low label based on their gender x age_group. Step 4: Run two-sided Welch t-test on total_claims within each gender separately.",
         "result": {
-            "female_t": -0.46,
-            "female_p": 0.64,
-            "male_t": -4.42,
-            "male_p": 0.0
+            "female_t": -0.4622,
+            "female_p": 0.6443,
+            "male_t": -4.4199,
+            "male_p": 0.000014
         },
         "tolerance": {
             "female_t": 0.01,
             "female_p": 0.01,
             "male_t": 0.01,
-            "male_p": 0.01
+            "male_p": 0.000005
         }
     },
     {
@@ -168,7 +168,7 @@
                 "sql": "SELECT co.name, AVG(m.home_team_goal + m.away_team_goal) AS avg_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name"
             }
         ],
-        "analysis": "Map F1 constructor nationality adjectives to country nouns (e.g., British\u2192England, Italian\u2192Italy). Note that some nationalities are already stored as nouns (e.g., Belgium). Join on mapped country name. For overlapping countries only, compute Pearson r between avg_position and avg_goals.",
+        "analysis": "Map F1 constructor nationality adjectives to country nouns (e.g., British→England, Italian→Italy). Note that some nationalities are already stored as nouns (e.g., Belgium). Join on mapped country name. For overlapping countries only, compute Pearson r between avg_position and avg_goals.",
         "result": {
             "r": 0.4536
         },
@@ -367,7 +367,7 @@
                 "sql": "SELECT co.name, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name"
             }
         ],
-        "analysis": "Map F1 constructor nationality adjectives to country nouns (e.g., British\u2192England, Italian\u2192Italy). Note Belgium is stored as a noun in the F1 DB. Join on mapped country name. For overlapping countries only, compute Pearson r between total_points and avg_home_goals.",
+        "analysis": "Map F1 constructor nationality adjectives to country nouns (e.g., British→England, Italian→Italy). Note Belgium is stored as a noun in the F1 DB. Join on mapped country name. For overlapping countries only, compute Pearson r between total_points and avg_home_goals.",
         "result": {
             "r": -0.4127
         },
@@ -383,7 +383,7 @@
         ],
         "difficulty": "moderate",
         "question": "To examine whether national economic wealth is associated with Olympic success, compute the Pearson correlation between countries' GDP per capita and their total medal count at the 2008 Summer Olympics. Return the result as {\"r\": <float>}.",
-        "evidence": "GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2008. Medal counts include Gold, Silver, and Bronze only. Apply the following country name mappings from the olympics database to world_development_indicators: USA\u2192United States, UK\u2192United Kingdom, Russia\u2192Russian Federation, South Korea\u2192Korea, Rep., Iran\u2192Iran, Islamic Rep., Egypt\u2192Egypt, Arab Rep., Venezuela\u2192Venezuela, RB, Kyrgyzstan\u2192Kyrgyz Republic, Slovakia\u2192Slovak Republic, Bahamas\u2192Bahamas, The, Ivory Coast\u2192Cote d'Ivoire. Exclude historical or dissolved nations with no WDI entry: Soviet Union, East Germany, West Germany, Unified Team, Yugoslavia, Czechoslovakia, Serbia and Montenegro, Taiwan, North Korea, Individual Olympic Athletes, Australasia. Only include countries present in both databases.",
+        "evidence": "GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2008. Medal counts include Gold, Silver, and Bronze only. Apply the following country name mappings from the olympics database to world_development_indicators: USA→United States, UK→United Kingdom, Russia→Russian Federation, South Korea→Korea, Rep., Iran→Iran, Islamic Rep., Egypt→Egypt, Arab Rep., Venezuela→Venezuela, RB, Kyrgyzstan→Kyrgyz Republic, Slovakia→Slovak Republic, Bahamas→Bahamas, The, Ivory Coast→Cote d'Ivoire. Exclude historical or dissolved nations with no WDI entry: Soviet Union, East Germany, West Germany, Unified Team, Yugoslavia, Czechoslovakia, Serbia and Montenegro, Taiwan, North Korea, Individual Olympic Athletes, Australasia. Only include countries present in both databases.",
         "intermediate_sqls": [
             {
                 "db": "olympics",
@@ -410,7 +410,7 @@
         ],
         "difficulty": "challenging",
         "question": "To examine how national economic wealth predicts Olympic success, compute the slope of the simple linear regression predicting total medal count from GDP per capita for the 2012 Summer Olympics. Return the result as {\"slope\": <float>}.",
-        "evidence": "GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2012. Medal counts include Gold, Silver, and Bronze only. Apply country name mappings: USA\u2192United States, UK\u2192United Kingdom, Russia\u2192Russian Federation, South Korea\u2192Korea, Rep., Iran\u2192Iran, Islamic Rep., Egypt\u2192Egypt, Arab Rep., Venezuela\u2192Venezuela, RB, Kyrgyzstan\u2192Kyrgyz Republic, Slovakia\u2192Slovak Republic, Bahamas\u2192Bahamas, The, Ivory Coast\u2192Cote d'Ivoire. Exclude: Soviet Union, East Germany, West Germany, Unified Team, Yugoslavia, Czechoslovakia, Serbia and Montenegro, Taiwan, North Korea, Individual Olympic Athletes, Australasia. Only include countries present in both databases.",
+        "evidence": "GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2012. Medal counts include Gold, Silver, and Bronze only. Apply country name mappings: USA→United States, UK→United Kingdom, Russia→Russian Federation, South Korea→Korea, Rep., Iran→Iran, Islamic Rep., Egypt→Egypt, Arab Rep., Venezuela→Venezuela, RB, Kyrgyzstan→Kyrgyz Republic, Slovakia→Slovak Republic, Bahamas→Bahamas, The, Ivory Coast→Cote d'Ivoire. Exclude: Soviet Union, East Germany, West Germany, Unified Team, Yugoslavia, Czechoslovakia, Serbia and Montenegro, Taiwan, North Korea, Individual Olympic Athletes, Australasia. Only include countries present in both databases.",
         "intermediate_sqls": [
             {
                 "db": "olympics",
@@ -437,7 +437,7 @@
         ],
         "difficulty": "challenging",
         "question": "To model the joint effect of economic wealth and population size on Olympic performance, fit an OLS multiple linear regression predicting each country's total medal count from GDP per capita and total population for the 2012 Summer Olympics. Return the intercept and two coefficients as {\"beta_0\": <float>, \"beta_1\": <float>, \"beta_2\": <float>}.",
-        "evidence": "GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2012. Total population uses indicator code SP.POP.TOTL for year 2012. Medal counts include Gold, Silver, and Bronze only. Apply country name mappings: USA\u2192United States, UK\u2192United Kingdom, Russia\u2192Russian Federation, South Korea\u2192Korea, Rep., Iran\u2192Iran, Islamic Rep., Egypt\u2192Egypt, Arab Rep., Venezuela\u2192Venezuela, RB, Kyrgyzstan\u2192Kyrgyz Republic, Slovakia\u2192Slovak Republic, Bahamas\u2192Bahamas, The, Ivory Coast\u2192Cote d'Ivoire. Exclude: Soviet Union, East Germany, West Germany, Unified Team, Yugoslavia, Czechoslovakia, Serbia and Montenegro, Taiwan, North Korea, Individual Olympic Athletes, Australasia. Only include countries present in all three datasets.",
+        "evidence": "GDP per capita uses indicator code NY.GDP.PCAP.CD for year 2012. Total population uses indicator code SP.POP.TOTL for year 2012. Medal counts include Gold, Silver, and Bronze only. Apply country name mappings: USA→United States, UK→United Kingdom, Russia→Russian Federation, South Korea→Korea, Rep., Iran→Iran, Islamic Rep., Egypt→Egypt, Arab Rep., Venezuela→Venezuela, RB, Kyrgyzstan→Kyrgyz Republic, Slovakia→Slovak Republic, Bahamas→Bahamas, The, Ivory Coast→Cote d'Ivoire. Exclude: Soviet Union, East Germany, West Germany, Unified Team, Yugoslavia, Czechoslovakia, Serbia and Montenegro, Taiwan, North Korea, Individual Olympic Athletes, Australasia. Only include countries present in all three datasets.",
         "intermediate_sqls": [
             {
                 "db": "olympics",
@@ -452,7 +452,7 @@
                 "sql": "SELECT CountryName, Value AS population FROM Indicators WHERE IndicatorCode = 'SP.POP.TOTL' AND Year = 2012"
             }
         ],
-        "analysis": "Apply country name mapping. Exclude dissolved nations. Intersect all three datasets (n=81). Construct design matrix X = [1, gdp_per_capita, population] and target y = medal_count. Solve OLS normal equations \u03b2 = (X\u1d40X)\u207b\u00b9X\u1d40y to get \u03b20, \u03b21, \u03b22.",
+        "analysis": "Apply country name mapping. Exclude dissolved nations. Intersect all three datasets (n=81). Construct design matrix X = [1, gdp_per_capita, population] and target y = medal_count. Solve OLS normal equations β = (XᵀX)⁻¹Xᵀy to get β0, β1, β2.",
         "result": {
             "beta_0": 5.5546,
             "beta_1": 0.0006213738,
@@ -537,7 +537,7 @@
                 "sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2000 AND g.season = 'Summer' GROUP BY nr.region_name"
             }
         ],
-        "analysis": "Map basketball IOC 3-letter codes to olympics region names (e.g., HOL\u2192Netherlands, NGR\u2192Nigeria, ENG\u2192UK). Exclude dissolved/non-sovereign entities. Join on mapped country name. Compute Pearson r between player_count and total_medals.",
+        "analysis": "Map basketball IOC 3-letter codes to olympics region names (e.g., HOL→Netherlands, NGR→Nigeria, ENG→UK). Exclude dissolved/non-sovereign entities. Join on mapped country name. Compute Pearson r between player_count and total_medals.",
         "result": {
             "r": 0.5893
         },
@@ -564,7 +564,7 @@
                 "sql": "SELECT ShortName, IncomeGroup FROM Country WHERE IncomeGroup IS NOT NULL AND IncomeGroup != ''"
             }
         ],
-        "analysis": "Apply country name mapping (e.g., USA\u2192United States, UK\u2192United Kingdom). Exclude dissolved nations. Join on country name. Split into High income vs Low/Lower-middle income groups. Run two-sided Welch t-test on total_medals.",
+        "analysis": "Apply country name mapping (e.g., USA→United States, UK→United Kingdom). Exclude dissolved nations. Join on country name. Split into High income vs Low/Lower-middle income groups. Run two-sided Welch t-test on total_medals.",
         "result": {
             "t": 4.0167,
             "p": 0.0002

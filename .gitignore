@@ -1,5 +1,25 @@
+# Data directories (large files, not for version control)
 data/
 databases/
+dat/
 
+# Environment
 .env
 .DS_Store
+
+# Schema dump (generated from databases, regenerate with dump_schemas.py)
+schemas.json
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Hidden dot-folders/files (keep .gitignore itself tracked)
+.*
+!.gitignore
+
+# Keep runs folder tracked
+!runs/
+!runs/.gitkeep

@@ -1,0 +1,313 @@
+======================================================================
+BASELINE LLM BENCHMARK EVALUATION
+Benchmark: train_benchmark_fab.json
+Model:     claude-sonnet-4-5
+Generated: 2026-03-25 16:21:34
+======================================================================
+
+======================================================================
+Task 1 [VERY EASY]
+Q: What is the average loan amount for loans with a duration of 60 months?
+
+--- Calling LLM ---
+```json
+{
+  "sqls": [
+    {"db_id": "loan", "sql": "SELECT AVG(amount) FROM loan WHERE duration = 60"}
+  ]
+}
+```
+
+--- Executing SQL ---
+
+DB: loan
+SQL: SELECT AVG(amount) FROM loan WHERE duration = 60
+  ERROR: Database not found: databases/loan/loan.sqlite
+
+======================================================================
+Task 2 [EASY]
+Q: Which country has the highest ratio of Olympic medals to GDP per capita?
+
+--- Calling LLM ---
+```json
+{
+  "sqls": [
+    {
+      "db_id": "olympics",
+      "sql": "SELECT nr.region_name, COUNT(ce.medal_id) as total_medals FROM noc_region nr JOIN person_region pr ON nr.id = pr.region_id JOIN person p ON pr.person_id = p.id JOIN games_competitor gc ON p.id = gc.person_id JOIN competitor_event ce ON gc.id = ce.competitor_id WHERE ce.medal_id IS NOT NULL AND nr.region_name NOT IN ('Soviet Union', 'East Germany', 'West Germany', 'Unified Team', 'Yugoslavia', 'Czechoslovakia', 'Serbia and Montenegro', 'Taiwan', 'North Korea', 'Individual Olympic Athletes', 'Australasia') GROUP BY nr.region_name"
+    },
+    {
+      "db_id": "world_development_indicators",
+      "sql": "SELECT CountryName, Value as gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012 AND Value IS NOT NULL"
+    }
+  ]
+}
+```
+
+--- Executing SQL ---
+
+DB: olympics
+SQL: SELECT nr.region_name, COUNT(ce.medal_id) as total_medals FROM noc_region nr JOIN person_region pr ON nr.id = pr.region_id JOIN person p ON pr.person_id = p.id JOIN games_competitor gc ON p.id = gc.person_id JOIN competitor_event ce ON gc.id = ce.competitor_id WHERE ce.medal_id IS NOT NULL AND nr.region_name NOT IN ('Soviet Union', 'East Germany', 'West Germany', 'Unified Team', 'Yugoslavia', 'Czechoslovakia', 'Serbia and Montenegro', 'Taiwan', 'North Korea', 'Individual Olympic Athletes', 'Australasia') GROUP BY nr.region_name
+  region_name         | total_medals
+  --------------------+-------------
+  Afghanistan         | 78          
+  Albania             | 78          
+  Algeria             | 555         
+  American Samoa      | 37          
+  Andorra             | 169         
+  Angola              | 267         
+  Antigua and Barbuda | 132         
+  Argentina           | 3073        
+  Armenia             | 241         
+  Aruba               | 44          
+  Australia           | 7584        
+  Austria             | 5016        
+  Azerbaijan          | 322         
+  Bahamas             | 376         
+  Bahrain             | 113         
+  ... (217 rows total)
+
+DB: world_development_indicators
+SQL: SELECT CountryName, Value as gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012 AND Value IS NOT NULL
+  CountryName                                   | gdp_per_capita
+  ----------------------------------------------+---------------
+  Arab World                                    | 7465          
+  Caribbean small states                        | 9586          
+  Central Europe and the Baltics                | 12981         
+  East Asia & Pacific (all income levels)       | 9241          
+  East Asia & Pacific (developing only)         | 5346          
+  Euro area                                     | 37586         
+  Europe & Central Asia (all income levels)     | 24589         
+  Europe & Central Asia (developing only)       | 6719          
+  European Union                                | 34147         
+  Fragile and conflict affected situations      | 1603          
+  Heavily indebted poor countries (HIPC)        | 830           
+  High income                                   | 37321         
+  High income: nonOECD                          | 19098         
+  High income: OECD                             | 42914         
+  Latin America & Caribbean (all income levels) | 9992          
+  ... (225 rows total)
+
+--- Computing answer ---
+Gold:     {"top_country": "China", "total_medals": 991, "gdp_per_capita": 6264, "medal_to_gdp_ratio": 0.158206}
+Computed: {"top_country": "India", "total_medals": 1263, "gdp_per_capita": 1449, "medal_to_gdp_ratio": 0.871636}
+Result: FAIL — top_country: expected 'China', got 'India'; total_medals: expected 991, got 1263.0 (diff 27.45%); gdp_per_capita: expected 6264, got 1449.0 (diff 76.87%); medal_to_gdp_ratio: expected 0.158206, got 0.871636 (diff 450.95%)
+
+======================================================================
+Task 3 [MEDIUM-HARD]
+Q: Compute the Pearson correlation between countries' GDP per capita in 2008 and their total medal counts for the 2008 Summer Olympics. Consider only countries represented in both databases with reconciled naming conventions.
+
+--- Calling LLM ---
+```json
+{
+  "sqls": [
+    {
+      "db_id": "world_development_indicators",
+      "sql": "SELECT c.ShortName, i.Value as gdp_per_capita FROM Indicators i JOIN Country c ON i.CountryCode = c.CountryCode WHERE i.IndicatorCode = 'NY.GDP.PCAP.CD' AND i.Year = 2008 AND i.Value IS NOT NULL"
+    },
+    {
+      "db_id": "olympics",
+      "sql": "SELECT nr.region_name, COUNT(*) as medal_count FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id JOIN games g ON gc.games_id = g.id WHERE g.games_year = 2008 AND g.season = 'Summer' AND ce.medal_id IS NOT NULL AND nr.region_name NOT IN ('Soviet Union', 'East Germany', 'West Germany', 'Unified Team', 'Yugoslavia', 'Czechoslovakia', 'Serbia and Montenegro', 'Taiwan', 'North Korea', 'Individual Olympic Athletes', 'Australasia') GROUP BY nr.region_name"
+    }
+  ]
+}
+```
+
+--- Executing SQL ---
+
+DB: world_development_indicators
+SQL: SELECT c.ShortName, i.Value as gdp_per_capita FROM Indicators i JOIN Country c ON i.CountryCode = c.CountryCode WHERE i.IndicatorCode = 'NY.GDP.PCAP.CD' AND i.Year = 2008 AND i.Value IS NOT NULL
+  ShortName                                     | gdp_per_capita
+  ----------------------------------------------+---------------
+  Arab World                                    | 6171          
+  Caribbean small states                        | 9822          
+  Central Europe and the Baltics                | 14449         
+  East Asia & Pacific (all income levels)       | 6370          
+  East Asia & Pacific (developing only)         | 3073          
+  Euro area                                     | 42211         
+  Europe & Central Asia (all income levels)     | 26174         
+  Europe & Central Asia (developing only)       | 6347          
+  European Union                                | 37915         
+  Fragile and conflict affected situations      | 1360          
+  Heavily indebted poor countries (HIPC)        | 699           
+  High income                                   | 35676         
+  High income: nonOECD                          | 15730         
+  High income: OECD                             | 41673         
+  Latin America & Caribbean (all income levels) | 7904          
+  ... (230 rows total)
+
+DB: olympics
+SQL: SELECT nr.region_name, COUNT(*) as medal_count FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id JOIN games g ON gc.games_id = g.id WHERE g.games_year = 2008 AND g.season = 'Summer' AND ce.medal_id IS NOT NULL AND nr.region_name NOT IN ('Soviet Union', 'East Germany', 'West Germany', 'Unified Team', 'Yugoslavia', 'Czechoslovakia', 'Serbia and Montenegro', 'Taiwan', 'North Korea', 'Individual Olympic Athletes', 'Australasia') GROUP BY nr.region_name
+  region_name         | medal_count
+  --------------------+------------
+  Afghanistan         | 4          
+  Albania             | 12         
+  Algeria             | 57         
+  American Samoa      | 4          
+  Andorra             | 5          
+  Angola              | 33         
+  Antigua and Barbuda | 5          
+  Argentina           | 147        
+  Armenia             | 28         
+  Aruba               | 2          
+  Australia           | 573        
+  Austria             | 94         
+  Azerbaijan          | 53         
+  Bahamas             | 33         
+  Bahrain             | 15         
+  ... (202 rows total)
+
+--- Computing answer ---
+Gold:     {"pearson_correlation": 0.260772, "n_countries_included": 85}
+Computed: {"pearson_correlation": 0.231556, "n_countries_included": 173}
+Result: FAIL — pearson_correlation: expected 0.260772, got 0.231556 (diff 11.20%); n_countries_included: expected 85, got 173.0 (diff 103.53%)
+
+======================================================================
+Task 4 [HARD]
+Q: What is the slope of the linear regression between countries' GDP per capita and their total medal count for the 2012 Summer Olympics? Consider only countries represented in both databases with reconciled naming conventions.
+
+--- Calling LLM ---
+```json
+{
+  "sqls": [
+    {
+      "db_id": "world_development_indicators",
+      "sql": "SELECT CountryName, Value as gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012 AND Value IS NOT NULL"
+    },
+    {
+      "db_id": "olympics",
+      "sql": "SELECT nr.region_name, COUNT(ce.medal_id) as total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id JOIN games g ON gc.games_id = g.id WHERE g.games_year = 2012 AND g.season = 'Summer' AND ce.medal_id IS NOT NULL AND nr.region_name NOT IN ('Soviet Union', 'East Germany', 'West Germany', 'Unified Team', 'Yugoslavia', 'Czechoslovakia', 'Serbia and Montenegro', 'Taiwan', 'North Korea', 'Individual Olympic Athletes', 'Australasia') GROUP BY nr.region_name"
+    }
+  ]
+}
+```
+
+--- Executing SQL ---
+
+DB: world_development_indicators
+SQL: SELECT CountryName, Value as gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012 AND Value IS NOT NULL
+  CountryName                                   | gdp_per_capita
+  ----------------------------------------------+---------------
+  Arab World                                    | 7465          
+  Caribbean small states                        | 9586          
+  Central Europe and the Baltics                | 12981         
+  East Asia & Pacific (all income levels)       | 9241          
+  East Asia & Pacific (developing only)         | 5346          
+  Euro area                                     | 37586         
+  Europe & Central Asia (all income levels)     | 24589         
+  Europe & Central Asia (developing only)       | 6719          
+  European Union                                | 34147         
+  Fragile and conflict affected situations      | 1603          
+  Heavily indebted poor countries (HIPC)        | 830           
+  High income                                   | 37321         
+  High income: nonOECD                          | 19098         
+  High income: OECD                             | 42914         
+  Latin America & Caribbean (all income levels) | 9992          
+  ... (225 rows total)
+
+DB: olympics
+SQL: SELECT nr.region_name, COUNT(ce.medal_id) as total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id JOIN games g ON gc.games_id = g.id WHERE g.games_year = 2012 AND g.season = 'Summer' AND ce.medal_id IS NOT NULL AND nr.region_name NOT IN ('Soviet Union', 'East Germany', 'West Germany', 'Unified Team', 'Yugoslavia', 'Czechoslovakia', 'Serbia and Montenegro', 'Taiwan', 'North Korea', 'Individual Olympic Athletes', 'Australasia') GROUP BY nr.region_name
+  region_name         | total_medals
+  --------------------+-------------
+  Afghanistan         | 6           
+  Albania             | 11          
+  Algeria             | 41          
+  American Samoa      | 4           
+  Andorra             | 6           
+  Angola              | 35          
+  Antigua and Barbuda | 4           
+  Argentina           | 149         
+  Armenia             | 31          
+  Aruba               | 5           
+  Australia           | 517         
+  Austria             | 92          
+  Azerbaijan          | 71          
+  Bahamas             | 29          
+  Bahrain             | 16          
+  ... (205 rows total)
+
+--- Computing answer ---
+Gold:     {"regression_slope": 0.00053765, "n_countries_included": 81}
+Computed: {"regression_slope": 0.00174276, "n_countries_included": 176}
+Result: FAIL — regression_slope: expected 0.00053765, got 0.00174276 (diff 224.14%); n_countries_included: expected 81, got 176.0 (diff 117.28%)
+
+======================================================================
+Task 5 [VERY HARD]
+Q: For the 2012 Summer Olympics, fit an OLS multiple linear regression predicting each country's total medal count (y) from two predictors: GDP per capita (x₁) and total population (x₂), both for year 2012. Report the intercept β₀, the GDP per capita coefficient β₁, and the population coefficient β₂, each rounded to 10 decimal places.
+
+--- Calling LLM ---
+```json
+{
+  "sqls": [
+    {
+      "db_id": "olympics",
+      "sql": "WITH medal_counts AS (SELECT nr.region_name, COUNT(*) as total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE g.games_year = 2012 AND g.season = 'Summer' AND ce.medal_id IN (1, 2, 3) GROUP BY nr.region_name) SELECT region_name, total_medals FROM medal_counts WHERE region_name NOT IN ('Soviet Union', 'East Germany', 'West Germany', 'Unified Team', 'Yugoslavia', 'Czechoslovakia', 'Serbia and Montenegro', 'Taiwan', 'North Korea', 'Individual Olympic Athletes', 'Australasia') ORDER BY region_name"
+    },
+    {
+      "db_id": "world_development_indicators",
+      "sql": "SELECT gdp.CountryName, gdp.Value as gdp_per_capita, pop.Value as population FROM Indicators gdp JOIN Indicators pop ON gdp.CountryCode = pop.CountryCode AND gdp.Year = pop.Year WHERE gdp.IndicatorCode = 'NY.GDP.PCAP.CD' AND pop.IndicatorCode = 'SP.POP.TOTL' AND gdp.Year = 2012 AND gdp.Value IS NOT NULL AND pop.Value IS NOT NULL ORDER BY gdp.CountryName"
+    }
+  ]
+}
+```
+
+--- Executing SQL ---
+
+DB: olympics
+SQL: WITH medal_counts AS (SELECT nr.region_name, COUNT(*) as total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE g.games_year = 2012 AND g.season = 'Summer' AND ce.medal_id IN (1, 2, 3) GROUP BY nr.region_name) SELECT region_name, total_medals FROM medal_counts WHERE region_name NOT IN ('Soviet Union', 'East Germany', 'West Germany', 'Unified Team', 'Yugoslavia', 'Czechoslovakia', 'Serbia and Montenegro', 'Taiwan', 'North Korea', 'Individual Olympic Athletes', 'Australasia') ORDER BY region_name
+  region_name | total_medals
+  ------------+-------------
+  Afghanistan | 1           
+  Algeria     | 1           
+  Argentina   | 19          
+  Armenia     | 3           
+  Australia   | 115         
+  Azerbaijan  | 12          
+  Bahamas     | 4           
+  Bahrain     | 1           
+  Belarus     | 23          
+  Belgium     | 3           
+  Botswana    | 1           
+  Brazil      | 60          
+  Bulgaria    | 2           
+  Canada      | 55          
+  China       | 125         
+  ... (83 rows total)
+
+DB: world_development_indicators
+SQL: SELECT gdp.CountryName, gdp.Value as gdp_per_capita, pop.Value as population FROM Indicators gdp JOIN Indicators pop ON gdp.CountryCode = pop.CountryCode AND gdp.Year = pop.Year WHERE gdp.IndicatorCode = 'NY.GDP.PCAP.CD' AND pop.IndicatorCode = 'SP.POP.TOTL' AND gdp.Year = 2012 AND gdp.Value IS NOT NULL AND pop.Value IS NOT NULL ORDER BY gdp.CountryName
+  CountryName         | gdp_per_capita | population
+  --------------------+----------------+-----------
+  Afghanistan         | 690            | 29726803  
+  Albania             | 4247           | 2900489   
+  Algeria             | 5583           | 37439427  
+  Andorra             | 39666          | 79316     
+  Angola              | 5531           | 22685632  
+  Antigua and Barbuda | 13525          | 89069     
+  Arab World          | 7465           | 368914383 
+  Argentina           | 14357          | 42095224  
+  Armenia             | 3565           | 2978339   
+  Australia           | 67646          | 22728254  
+  Austria             | 48324          | 8429991   
+  Azerbaijan          | 7393           | 9295784   
+  Bahamas, The        | 22112          | 372388    
+  Bahrain             | 23063          | 1333577   
+  Bangladesh          | 858            | 155257387 
+  ... (225 rows total)
+
+--- Computing answer ---
+Gold:     {"beta_0_intercept": 5.5546487645, "beta_1_gdp_per_capita": 0.0006213738, "beta_2_population": 7.29e-08, "n_countries_included": 81}
+Computed: {"beta_0_intercept": 5.5546487645, "beta_1_gdp_per_capita": 0.0006213738, "beta_2_population": 7.29e-08, "n_countries_included": 81}
+Result: PASS
+
+======================================================================
+SUMMARY
+======================================================================
+  Task 1 [VERY EASY   ] FAIL  — SQL execution error on loan: Database not found: databases/loan/loan.sqlite
+  Task 2 [EASY        ] FAIL  — top_country: expected 'China', got 'India'; total_medals: expected 991, got 1263.0 (diff 27.45%); gdp_per_capita: expected 6264, got 1449.0 (diff 76.87%); medal_to_gdp_ratio: expected 0.158206, got 0.871636 (diff 450.95%)
+  Task 3 [MEDIUM-HARD ] FAIL  — pearson_correlation: expected 0.260772, got 0.231556 (diff 11.20%); n_countries_included: expected 85, got 173.0 (diff 103.53%)
+  Task 4 [HARD        ] FAIL  — regression_slope: expected 0.00053765, got 0.00174276 (diff 224.14%); n_countries_included: expected 81, got 176.0 (diff 117.28%)
+  Task 5 [VERY HARD   ] PASS
+
+Accuracy: 1/5 (20%)
+======================================================================

@@ -25,6 +25,8 @@ If you want to target specific tasks instead:
 python run_agent_benchmark.py --data-dir ../data --task-ids 3,6 --verbose
 ```
 
+---
+
 ## Task Generation Pipeline
 
 ### Step 1: Idea Brainstorming from Existing BIRD Examples
