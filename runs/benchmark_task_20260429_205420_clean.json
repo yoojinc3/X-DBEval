@@ -1,0 +1,2917 @@
+{
+  "benchmark_json": "/Users/yoojin/Desktop/cs498/project/X-DBEval/dev/task.json",
+  "db_dir": "../X-DBEval_dev/dev/databases",
+  "data_dir": "../X-DBEval_dev/dev/databases",
+  "agent_dir": "/Users/yoojin/Desktop/cs498/project/cs498-dku-agent",
+  "run_at": "2026-04-29T21:03:08",
+  "task_count": 20,
+  "correct_tasks": 3,
+  "accuracy": 0.15,
+  "sql_success_tasks": 18,
+  "skipped_tasks": [],
+  "input_tokens": 215924,
+  "output_tokens": 17669,
+  "estimated_cost_usd": 1.398733,
+  "elapsed_s": 528.9420080184937,
+  "total_task_time_s": 1699.5320959091187,
+  "tasks": [
+    {
+      "task_id": 1,
+      "difficulty": "simple",
+      "question": "Across all Chicago wards, compute the Pearson correlation coefficient between the ward-level food inspection failure rate and the ward-level crime arrest rate.",
+      "db_id": [
+        "chicago_crime",
+        "food_inspection_2"
+      ],
+      "selected_dbs": [
+        "chicago_crime",
+        "food_inspection_2"
+      ],
+      "final_score": 1.0,
+      "correct": true,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "r": 0.5181
+      },
+      "gold_answer": {
+        "r": 0.518
+      },
+      "sql_plan": [
+        {
+          "db": "food_inspection_2",
+          "sql": "SELECT e.ward AS ward_no, SUM(CASE WHEN i.results = 'Fail' THEN 1 ELSE 0 END) AS fail_count, COUNT(*) AS total_inspections FROM inspection i JOIN establishment e ON i.license_no = e.license_no WHERE e.ward IS NOT NULL GROUP BY e.ward",
+          "purpose": "Per-ward count of failed inspections and total inspections to compute the ward-level food inspection failure rate."
+        },
+        {
+          "db": "chicago_crime",
+          "sql": "SELECT ward_no, SUM(CASE WHEN arrest = 'TRUE' THEN 1 ELSE 0 END) AS arrest_count, COUNT(*) AS total_crimes FROM Crime WHERE ward_no IS NOT NULL GROUP BY ward_no",
+          "purpose": "Per-ward count of arrests and total crimes to compute the ward-level crime arrest rate."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "food_inspection_2",
+          "gold_sql": "SELECT e.ward, CAST(SUM(CASE WHEN i.results = 'Fail' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS fail_rate FROM establishment AS e INNER JOIN inspection AS i ON e.license_no = i.license_no GROUP BY e.ward",
+          "generated_sql": "SELECT e.ward AS ward_no, SUM(CASE WHEN i.results = 'Fail' THEN 1 ELSE 0 END) AS fail_count, COUNT(*) AS total_inspections FROM inspection i JOIN establishment e ON i.license_no = e.license_no WHERE e.ward IS NOT NULL GROUP BY e.ward",
+          "gold_sql_normalized": "SELECT e.ward, CAST(SUM(CASE WHEN i.results = 'Fail' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS fail_rate FROM establishment AS e INNER JOIN inspection AS i ON e.license_no = i.license_no GROUP BY e.ward",
+          "generated_sql_normalized": "SELECT e.ward AS ward_no, SUM(CASE WHEN i.results = 'Fail' THEN 1 ELSE 0 END) AS fail_count, COUNT(*) AS total_inspections FROM inspection i JOIN establishment e ON i.license_no = e.license_no WHERE e.ward IS NOT NULL GROUP BY e.ward",
+          "sql_text_match": false,
+          "gold_row_count": 52,
+          "gold_rows_preview": [
+            {
+              "ward": null,
+              "fail_rate": 0.18
+            },
+            {
+              "ward": 0,
+              "fail_rate": 0.0
+            },
+            {
+              "ward": 1,
+              "fail_rate": 0.21458880581935744
+            }
+          ],
+          "generated_row_count": 51,
+          "generated_rows_preview": [
+            {
+              "ward_no": 0,
+              "fail_count": 0,
+              "total_inspections": 3
+            },
+            {
+              "ward_no": 1,
+              "fail_count": 1062,
+              "total_inspections": 4949
+            },
+            {
+              "ward_no": 2,
+              "fail_count": 887,
+              "total_inspections": 4525
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=103, model=153"
+          }
+        },
+        {
+          "db": "chicago_crime",
+          "gold_sql": "SELECT ward_no, CAST(SUM(CASE WHEN arrest = 'TRUE' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS arrest_rate FROM Crime GROUP BY ward_no",
+          "generated_sql": "SELECT ward_no, SUM(CASE WHEN arrest = 'TRUE' THEN 1 ELSE 0 END) AS arrest_count, COUNT(*) AS total_crimes FROM Crime WHERE ward_no IS NOT NULL GROUP BY ward_no",
+          "gold_sql_normalized": "SELECT ward_no, CAST(SUM(CASE WHEN arrest = 'TRUE' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS arrest_rate FROM Crime GROUP BY ward_no",
+          "generated_sql_normalized": "SELECT ward_no, SUM(CASE WHEN arrest = 'TRUE' THEN 1 ELSE 0 END) AS arrest_count, COUNT(*) AS total_crimes FROM Crime WHERE ward_no IS NOT NULL GROUP BY ward_no",
+          "sql_text_match": false,
+          "gold_row_count": 51,
+          "gold_rows_preview": [
+            {
+              "ward_no": null,
+              "arrest_rate": 0.25
+            },
+            {
+              "ward_no": 1,
+              "arrest_rate": 0.1352077734132727
+            },
+            {
+              "ward_no": 2,
+              "arrest_rate": 0.15537255680126996
+            }
+          ],
+          "generated_row_count": 50,
+          "generated_rows_preview": [
+            {
+              "ward_no": 1,
+              "arrest_count": 654,
+              "total_crimes": 4837
+            },
+            {
+              "ward_no": 2,
+              "arrest_count": 1566,
+              "total_crimes": 10079
+            },
+            {
+              "ward_no": 3,
+              "arrest_count": 1335,
+              "total_crimes": 6996
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=101, model=150"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 8663,
+        "output_tokens": 739,
+        "llm_time_s": 11.773242473602295,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1320,
+            "output": 133,
+            "elapsed_s": 3.9244022369384766
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 7343,
+            "output": 606,
+            "elapsed_s": 7.848840236663818
+          }
+        ],
+        "estimated_cost_usd": 0.05782
+      },
+      "elapsed_s": 73.37926030158997,
+      "error": null
+    },
+    {
+      "task_id": 2,
+      "difficulty": "challenging",
+      "question": "To examine how harsh weather relates to domestic violence in Chicago, compute the Welch's t-statistic and p-value comparing monthly domestic violence crime rates between harsh and non-harsh months. Return the result as {\"t\": <float>, \"p\": <float>}",
+      "db_id": [
+        "chicago_crime",
+        "sales_in_weather"
+      ],
+      "selected_dbs": [
+        "chicago_crime",
+        "sales_in_weather"
+      ],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "t": 2.34,
+        "p": 0.026
+      },
+      "gold_answer": {
+        "t": 2.27,
+        "p": 0.113
+      },
+      "sql_plan": [
+        {
+          "db": "chicago_crime",
+          "sql": "SELECT strftime('%Y-%m', substr(date, instr(date,' ')*0 + (CASE WHEN instr(date,'/')>0 THEN 0 ELSE 0 END), 0)) AS dummy, date, domestic FROM Crime",
+          "purpose": "Return raw crime date and domestic flag for every crime so we can compute monthly domestic crime counts in pandas."
+        },
+        {
+          "db": "sales_in_weather",
+          "sql": "SELECT station_nbr, date, preciptotal FROM weather",
+          "purpose": "Return per-station daily precipitation so we can compute monthly average daily precipitation across stations."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "sales_in_weather",
+          "gold_sql": "SELECT yr_month, AVG(station_avg) AS avg_precip FROM (SELECT station_nbr, SUBSTR(date, 1, 7) AS yr_month, AVG(preciptotal) AS station_avg FROM weather WHERE preciptotal IS NOT NULL GROUP BY station_nbr, SUBSTR(date, 1, 7)) GROUP BY yr_month",
+          "generated_sql": "SELECT station_nbr, date, preciptotal FROM weather",
+          "gold_sql_normalized": "SELECT yr_month, AVG(station_avg) AS avg_precip FROM (SELECT station_nbr, SUBSTR(date, 1, 7) AS yr_month, AVG(preciptotal) AS station_avg FROM weather WHERE preciptotal IS NOT NULL GROUP BY station_nbr, SUBSTR(date, 1, 7)) GROUP BY yr_month",
+          "generated_sql_normalized": "SELECT station_nbr, date, preciptotal FROM weather",
+          "sql_text_match": false,
+          "gold_row_count": 34,
+          "gold_rows_preview": [
+            {
+              "yr_month": "2012-01",
+              "avg_precip": 0.08555178268251273
+            },
+            {
+              "yr_month": "2012-02",
+              "avg_precip": 0.06602540834845735
+            },
+            {
+              "yr_month": "2012-03",
+              "avg_precip": 0.12499151103565366
+            }
+          ],
+          "generated_row_count": 20517,
+          "generated_rows_preview": [
+            {
+              "station_nbr": 1,
+              "date": "2012-01-01",
+              "preciptotal": 0.05
+            },
+            {
+              "station_nbr": 1,
+              "date": "2012-01-02",
+              "preciptotal": 0.01
+            },
+            {
+              "station_nbr": 1,
+              "date": "2012-01-03",
+              "preciptotal": 0.0
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=34, model=40174"
+          }
+        },
+        {
+          "db": "chicago_crime",
+          "gold_sql": "SELECT PRINTF('%04d-%02d', CAST(SUBSTR(date, INSTR(date,'/')+INSTR(SUBSTR(date,INSTR(date,'/')+1),'/') +1, 4) AS INT), CAST(SUBSTR(date, 1, INSTR(date,'/')-1) AS INT)) AS yr_month, CAST(SUM(CASE WHEN domestic = 'TRUE' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS dv_rate FROM Crime GROUP BY yr_month",
+          "generated_sql": "SELECT strftime('%Y-%m', substr(date, instr(date,' ')*0 + (CASE WHEN instr(date,'/')>0 THEN 0 ELSE 0 END), 0)) AS dummy, date, domestic FROM Crime",
+          "gold_sql_normalized": "SELECT PRINTF('%04d-%02d', CAST(SUBSTR(date, INSTR(date,'/')+INSTR(SUBSTR(date,INSTR(date,'/')+1),'/') +1, 4) AS INT), CAST(SUBSTR(date, 1, INSTR(date,'/')-1) AS INT)) AS yr_month, CAST(SUM(CASE WHEN domestic = 'TRUE' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS dv_rate FROM Crime GROUP BY yr_month",
+          "generated_sql_normalized": "SELECT strftime('%Y-%m', substr(date, instr(date,' ')*0 + (CASE WHEN instr(date,'/')>0 THEN 0 ELSE 0 END), 0)) AS dummy, date, domestic FROM Crime",
+          "sql_text_match": false,
+          "gold_row_count": 12,
+          "gold_rows_preview": [
+            {
+              "yr_month": "2018-01",
+              "dv_rate": 0.16007634334931975
+            },
+            {
+              "yr_month": "2018-02",
+              "dv_rate": 0.16666666666666666
+            },
+            {
+              "yr_month": "2018-03",
+              "dv_rate": 0.16723259762308998
+            }
+          ],
+          "generated_row_count": 268002,
+          "generated_rows_preview": [
+            {
+              "dummy": null,
+              "date": "1/1/2018 2:46",
+              "domestic": "FALSE"
+            },
+            {
+              "dummy": null,
+              "date": "1/1/2018 11:33",
+              "domestic": "FALSE"
+            },
+            {
+              "dummy": null,
+              "date": "1/1/2018 18:27",
+              "domestic": "FALSE"
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=12, model=0"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 7400,
+        "output_tokens": 951,
+        "llm_time_s": 16.784356355667114,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1342,
+            "output": 136,
+            "elapsed_s": 3.922307252883911
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 6058,
+            "output": 815,
+            "elapsed_s": 12.862049102783203
+          }
+        ],
+        "estimated_cost_usd": 0.056731000000000004
+      },
+      "elapsed_s": 70.73234796524048,
+      "error": null
+    },
+    {
+      "task_id": 3,
+      "difficulty": "challenging",
+      "question": "To examine whether age groups with higher self-reported mental health burden incur greater medical costs, run a gender-stratified Welch's t-test comparing total claim amounts per patient between high-burden and low-burden age groups within each gender. Return the result as {\"female_t\": <float>, \"female_p\": <float>, \"male_t\": <float>, \"male_p\": <float>}.",
+      "db_id": [
+        "synthea",
+        "mental_health_survey"
+      ],
+      "selected_dbs": [
+        "synthea",
+        "mental_health_survey"
+      ],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "female_t": 1.234,
+        "female_p": 0.218,
+        "male_t": 0.876,
+        "male_p": 0.381
+      },
+      "gold_answer": {
+        "female_t": -0.46,
+        "female_p": 0.64,
+        "male_t": -4.42,
+        "male_p": 0.0
+      },
+      "sql_plan": [
+        {
+          "db": "synthea",
+          "sql": "SELECT p.patient, p.gender, p.birthdate, p.deathdate, c.TOTAL FROM patients p JOIN claims c ON c.PATIENT = p.patient WHERE p.deathdate IS NULL AND p.gender IN ('M','F') AND CAST((julianday('now') - julianday(p.birthdate))/365.25 AS INTEGER) BETWEEN 18 AND 65",
+          "purpose": "Return per-claim totals for living patients aged 18-65 with gender M/F, plus birthdate to compute current age and assign age groups in pandas."
+        },
+        {
+          "db": "mental_health_survey",
+          "sql": "WITH age_ans AS (SELECT UserID, SurveyID, AnswerText AS age_text FROM Answer WHERE QuestionID = 1), gender_ans AS (SELECT UserID, SurveyID, AnswerText AS gender_text FROM Answer WHERE QuestionID = 2), mh_ans AS (SELECT UserID, SurveyID, AnswerText AS mh_text FROM Answer WHERE QuestionID = 33) SELECT a.UserID, a.SurveyID, a.age_text, g.gender_text, m.mh_text FROM age_ans a JOIN gender_ans g ON g.UserID = a.UserID AND g.SurveyID = a.SurveyID JOIN mh_ans m ON m.UserID = a.UserID AND m.SurveyID = a.SurveyID",
+          "purpose": "Return per-respondent age, gender, and mental-health-treatment answer (QuestionID 33) so we can compute burden rates per gender x age group in pandas."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "mental_health_survey",
+          "gold_sql": "SELECT a_gender.AnswerText AS gender, CASE WHEN CAST(a_age.AnswerText AS INT) BETWEEN 18 AND 34 THEN '18-34' WHEN CAST(a_age.AnswerText AS INT) BETWEEN 35 AND 49 THEN '35-49' WHEN CAST(a_age.AnswerText AS INT) BETWEEN 50 AND 65 THEN '50-65' END AS age_group, CAST(SUM(CASE WHEN a_mh.AnswerText = 'Yes' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS mh_rate FROM Answer a_mh JOIN Answer a_gender ON a_mh.UserID = a_gender.UserID AND a_mh.SurveyID = a_gender.SurveyID JOIN Answer a_age ON a_mh.UserID = a_age.UserID AND a_mh.SurveyID = a_age.SurveyID WHERE a_mh.QuestionID = 33 AND a_gender.QuestionID = 2 AND a_gender.AnswerText IN ('Male', 'Female') AND a_age.QuestionID = 1 AND CAST(a_age.AnswerText AS INT) BETWEEN 18 AND 65 GROUP BY gender, age_group",
+          "generated_sql": "WITH age_ans AS (SELECT UserID, SurveyID, AnswerText AS age_text FROM Answer WHERE QuestionID = 1), gender_ans AS (SELECT UserID, SurveyID, AnswerText AS gender_text FROM Answer WHERE QuestionID = 2), mh_ans AS (SELECT UserID, SurveyID, AnswerText AS mh_text FROM Answer WHERE QuestionID = 33) SELECT a.UserID, a.SurveyID, a.age_text, g.gender_text, m.mh_text FROM age_ans a JOIN gender_ans g ON g.UserID = a.UserID AND g.SurveyID = a.SurveyID JOIN mh_ans m ON m.UserID = a.UserID AND m.SurveyID = a.SurveyID",
+          "gold_sql_normalized": "SELECT a_gender.AnswerText AS gender, CASE WHEN CAST(a_age.AnswerText AS INT) BETWEEN 18 AND 34 THEN '18-34' WHEN CAST(a_age.AnswerText AS INT) BETWEEN 35 AND 49 THEN '35-49' WHEN CAST(a_age.AnswerText AS INT) BETWEEN 50 AND 65 THEN '50-65' END AS age_group, CAST(SUM(CASE WHEN a_mh.AnswerText = 'Yes' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS mh_rate FROM Answer a_mh JOIN Answer a_gender ON a_mh.UserID = a_gender.UserID AND a_mh.SurveyID = a_gender.SurveyID JOIN Answer a_age ON a_mh.UserID = a_age.UserID AND a_mh.SurveyID = a_age.SurveyID WHERE a_mh.QuestionID = 33 AND a_gender.QuestionID = 2 AND a_gender.AnswerText IN ('Male', 'Female') AND a_age.QuestionID = 1 AND CAST(a_age.AnswerText AS INT) BETWEEN 18 AND 65 GROUP BY gender, age_group",
+          "generated_sql_normalized": "WITH age_ans AS (SELECT UserID, SurveyID, AnswerText AS age_text FROM Answer WHERE QuestionID = 1), gender_ans AS (SELECT UserID, SurveyID, AnswerText AS gender_text FROM Answer WHERE QuestionID = 2), mh_ans AS (SELECT UserID, SurveyID, AnswerText AS mh_text FROM Answer WHERE QuestionID = 33) SELECT a.UserID, a.SurveyID, a.age_text, g.gender_text, m.mh_text FROM age_ans a JOIN gender_ans g ON g.UserID = a.UserID AND g.SurveyID = a.SurveyID JOIN mh_ans m ON m.UserID = a.UserID AND m.SurveyID = a.SurveyID",
+          "sql_text_match": false,
+          "gold_row_count": 6,
+          "gold_rows_preview": [
+            {
+              "gender": "Female",
+              "age_group": "18-34",
+              "mh_rate": 0.5566750629722922
+            },
+            {
+              "gender": "Female",
+              "age_group": "35-49",
+              "mh_rate": 0.547945205479452
+            },
+            {
+              "gender": "Female",
+              "age_group": "50-65",
+              "mh_rate": 0.4583333333333333
+            }
+          ],
+          "generated_row_count": 2958,
+          "generated_rows_preview": [
+            {
+              "UserID": 1261,
+              "SurveyID": 2016,
+              "age_text": "39",
+              "gender_text": "Male",
+              "mh_text": "No"
+            },
+            {
+              "UserID": 1262,
+              "SurveyID": 2016,
+              "age_text": "29",
+              "gender_text": "Male",
+              "mh_text": "Yes"
+            },
+            {
+              "UserID": 1263,
+              "SurveyID": 2016,
+              "age_text": "38",
+              "gender_text": "Male",
+              "mh_text": "No"
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=6, model=8899"
+          }
+        },
+        {
+          "db": "synthea",
+          "gold_sql": "SELECT p.patient, p.gender, CASE WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 18 AND 34 THEN '18-34' WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 35 AND 49 THEN '35-49' WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 50 AND 65 THEN '50-65' END AS age_group, SUM(cl.TOTAL) AS total_claims FROM patients p JOIN claims cl ON p.patient = cl.PATIENT WHERE p.deathdate IS NULL GROUP BY p.patient",
+          "generated_sql": "SELECT p.patient, p.gender, p.birthdate, p.deathdate, c.TOTAL FROM patients p JOIN claims c ON c.PATIENT = p.patient WHERE p.deathdate IS NULL AND p.gender IN ('M','F') AND CAST((julianday('now') - julianday(p.birthdate))/365.25 AS INTEGER) BETWEEN 18 AND 65",
+          "gold_sql_normalized": "SELECT p.patient, p.gender, CASE WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 18 AND 34 THEN '18-34' WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 35 AND 49 THEN '35-49' WHEN (strftime('%Y', 'now') - strftime('%Y', p.birthdate)) BETWEEN 50 AND 65 THEN '50-65' END AS age_group, SUM(cl.TOTAL) AS total_claims FROM patients p JOIN claims cl ON p.patient = cl.PATIENT WHERE p.deathdate IS NULL GROUP BY p.patient",
+          "generated_sql_normalized": "SELECT p.patient, p.gender, p.birthdate, p.deathdate, c.TOTAL FROM patients p JOIN claims c ON c.PATIENT = p.patient WHERE p.deathdate IS NULL AND p.gender IN ('M','F') AND CAST((julianday('now') - julianday(p.birthdate))/365.25 AS INTEGER) BETWEEN 18 AND 65",
+          "sql_text_match": false,
+          "gold_row_count": 1004,
+          "gold_rows_preview": [
+            {
+              "patient": "00341a88-1cc1-4b39-b0f9-05b0531991a0",
+              "gender": "F",
+              "age_group": "50-65",
+              "total_claims": 1600
+            },
+            {
+              "patient": "004a5922-7c4d-40cc-a0f8-68f607044c99",
+              "gender": "M",
+              "age_group": null,
+              "total_claims": 1200
+            },
+            {
+              "patient": "00630ce3-e8eb-4ed4-889b-2c0ac257cbf4",
+              "gender": "M",
+              "age_group": "18-34",
+              "total_claims": 2100
+            }
+          ],
+          "generated_row_count": 12829,
+          "generated_rows_preview": [
+            {
+              "patient": "71949668-1c2e-43ae-ab0a-64654608defb",
+              "gender": "F",
+              "birthdate": "1988-05-28",
+              "deathdate": null,
+              "TOTAL": 100
+            },
+            {
+              "patient": "71949668-1c2e-43ae-ab0a-64654608defb",
+              "gender": "F",
+              "birthdate": "1988-05-28",
+              "deathdate": null,
+              "TOTAL": 100
+            },
+            {
+              "patient": "71949668-1c2e-43ae-ab0a-64654608defb",
+              "gender": "F",
+              "birthdate": "1988-05-28",
+              "deathdate": null,
+              "TOTAL": 100
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=1004, model=12829"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 10442,
+        "output_tokens": 1456,
+        "llm_time_s": 22.430134296417236,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1411,
+            "output": 140,
+            "elapsed_s": 4.3095152378082275
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 9031,
+            "output": 1316,
+            "elapsed_s": 18.12061905860901
+          }
+        ],
+        "estimated_cost_usd": 0.084388
+      },
+      "elapsed_s": 67.87367296218872,
+      "error": null
+    },
+    {
+      "task_id": 4,
+      "difficulty": "challenging",
+      "question": "To assess whether graduation outcomes predict post-enrollment adversity, compute the Spearman correlation between a school's 150% graduation rate and its composite adverse outcome rate. Return the result as {\"spearman_r\": <float>, \"p_value\": <float>}.",
+      "db_id": [
+        "student_loan",
+        "college_completion"
+      ],
+      "selected_dbs": [
+        "student_loan",
+        "college_completion"
+      ],
+      "final_score": 0.5,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "spearman_r": 0.058,
+        "p_value": 0.9131
+      },
+      "gold_answer": {
+        "spearman_r": -0.06,
+        "p_value": 0.913
+      },
+      "sql_plan": [
+        {
+          "db": "student_loan",
+          "sql": "SELECT e.school AS school_code, e.name AS student, CASE WHEN u.name IS NOT NULL THEN 1 ELSE 0 END AS unemployed, CASE WHEN b.name IS NOT NULL THEN 1 ELSE 0 END AS bankrupt, CASE WHEN npd.bool = 'neg' THEN 1 ELSE 0 END AS payment_due FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy b ON e.name = b.name LEFT JOIN no_payment_due npd ON e.name = npd.name",
+          "purpose": "Per-student adverse outcome indicators by school code in the student_loan DB."
+        },
+        {
+          "db": "college_completion",
+          "sql": "SELECT chronname, grad_150_value FROM institution_details WHERE chronname IN ('Orange Coast College','Santa Monica College','University of California at Berkeley','University of California at Los Angeles','University of California at San Diego','University of California-Irvine','University of California at Irvine','University of California-Berkeley','University of California-Los Angeles','University of California-San Diego')",
+          "purpose": "150% graduation rate for the six target California schools."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "student_loan",
+          "gold_sql": "SELECT e.school, CAST(COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR fb.name IS NOT NULL OR np.bool = 'pos' THEN e.name END) AS REAL) / COUNT(DISTINCT e.name) AS adverse_rate FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy fb ON e.name = fb.name LEFT JOIN no_payment_due np ON e.name = np.name GROUP BY e.school",
+          "generated_sql": "SELECT e.school AS school_code, e.name AS student, CASE WHEN u.name IS NOT NULL THEN 1 ELSE 0 END AS unemployed, CASE WHEN b.name IS NOT NULL THEN 1 ELSE 0 END AS bankrupt, CASE WHEN npd.bool = 'neg' THEN 1 ELSE 0 END AS payment_due FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy b ON e.name = b.name LEFT JOIN no_payment_due npd ON e.name = npd.name",
+          "gold_sql_normalized": "SELECT e.school, CAST(COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR fb.name IS NOT NULL OR np.bool = 'pos' THEN e.name END) AS REAL) / COUNT(DISTINCT e.name) AS adverse_rate FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy fb ON e.name = fb.name LEFT JOIN no_payment_due np ON e.name = np.name GROUP BY e.school",
+          "generated_sql_normalized": "SELECT e.school AS school_code, e.name AS student, CASE WHEN u.name IS NOT NULL THEN 1 ELSE 0 END AS unemployed, CASE WHEN b.name IS NOT NULL THEN 1 ELSE 0 END AS bankrupt, CASE WHEN npd.bool = 'neg' THEN 1 ELSE 0 END AS payment_due FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy b ON e.name = b.name LEFT JOIN no_payment_due npd ON e.name = npd.name",
+          "sql_text_match": false,
+          "gold_row_count": 6,
+          "gold_rows_preview": [
+            {
+              "school": "occ",
+              "adverse_rate": 0.6923076923076923
+            },
+            {
+              "school": "smc",
+              "adverse_rate": 0.6371681415929203
+            },
+            {
+              "school": "ucb",
+              "adverse_rate": 0.6629213483146067
+            }
+          ],
+          "generated_row_count": 1194,
+          "generated_rows_preview": [
+            {
+              "school_code": "occ",
+              "student": "student1",
+              "unemployed": 0,
+              "bankrupt": 0,
+              "payment_due": 0
+            },
+            {
+              "school_code": "smc",
+              "student": "student10",
+              "unemployed": 0,
+              "bankrupt": 0,
+              "payment_due": 1
+            },
+            {
+              "school_code": "ucb",
+              "student": "student10",
+              "unemployed": 0,
+              "bankrupt": 0,
+              "payment_due": 1
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=6, model=3582"
+          }
+        },
+        {
+          "db": "college_completion",
+          "gold_sql": "SELECT chronname, grad_150_value FROM institution_details WHERE grad_150_value IS NOT NULL",
+          "generated_sql": "SELECT chronname, grad_150_value FROM institution_details WHERE chronname IN ('Orange Coast College','Santa Monica College','University of California at Berkeley','University of California at Los Angeles','University of California at San Diego','University of California-Irvine','University of California at Irvine','University of California-Berkeley','University of California-Los Angeles','University of California-San Diego')",
+          "gold_sql_normalized": "SELECT chronname, grad_150_value FROM institution_details WHERE grad_150_value IS NOT NULL",
+          "generated_sql_normalized": "SELECT chronname, grad_150_value FROM institution_details WHERE chronname IN ('Orange Coast College','Santa Monica College','University of California at Berkeley','University of California at Los Angeles','University of California at San Diego','University of California-Irvine','University of California at Irvine','University of California-Berkeley','University of California-Los Angeles','University of California-San Diego')",
+          "sql_text_match": false,
+          "gold_row_count": 3467,
+          "gold_rows_preview": [
+            {
+              "chronname": "Alabama A&M University",
+              "grad_150_value": 29.1
+            },
+            {
+              "chronname": "University of Alabama at Birmingham",
+              "grad_150_value": 53.5
+            },
+            {
+              "chronname": "Amridge University",
+              "grad_150_value": 66.7
+            }
+          ],
+          "generated_row_count": 6,
+          "generated_rows_preview": [
+            {
+              "chronname": "University of California at Berkeley",
+              "grad_150_value": 91.0
+            },
+            {
+              "chronname": "University of California at Irvine",
+              "grad_150_value": 85.8
+            },
+            {
+              "chronname": "University of California at Los Angeles",
+              "grad_150_value": 90.3
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=3467, model=6"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 10005,
+        "output_tokens": 991,
+        "llm_time_s": 15.862456321716309,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1428,
+            "output": 147,
+            "elapsed_s": 4.3032190799713135
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 8577,
+            "output": 844,
+            "elapsed_s": 11.559237241744995
+          }
+        ],
+        "estimated_cost_usd": 0.070474
+      },
+      "elapsed_s": 83.4519910812378,
+      "error": null
+    },
+    {
+      "task_id": 5,
+      "difficulty": "challenging",
+      "question": "To examine whether institutional spending relative to labor market pay predicts student financial distress, compute the Pearson correlation between each school's spending-to-labor-market ratio and its student adverse outcome rate. Return the result as {\"r\": <float>}.",
+      "db_id": [
+        "student_loan",
+        "college_completion",
+        "human_resources"
+      ],
+      "selected_dbs": [
+        "student_loan",
+        "human_resources"
+      ],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "r": -0.2935
+      },
+      "gold_answer": {
+        "r": -0.63
+      },
+      "sql_plan": [
+        {
+          "db": "student_loan",
+          "sql": "SELECT e.name AS student, e.school, CASE WHEN u.name IS NOT NULL THEN 1 ELSE 0 END AS unemployed, CASE WHEN b.name IS NOT NULL THEN 1 ELSE 0 END AS bankrupt, CASE WHEN npd.bool = 'neg' THEN 1 ELSE 0 END AS payment_due FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy b ON e.name = b.name LEFT JOIN no_payment_due npd ON e.name = npd.name",
+          "purpose": "Returns each enrolled student with their school and flags for unemployment, bankruptcy, and having a payment due (no_payment_due=neg) so we can compute per-school adverse outcome rates."
+        },
+        {
+          "db": "human_resources",
+          "sql": "SELECT positionID, positiontitle, educationrequired, maxsalary FROM position WHERE educationrequired = '4 year degree'",
+          "purpose": "Returns positions requiring a bachelor's (4 year degree) with their max salary strings so we can compute the average max salary in post-processing."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "student_loan",
+          "gold_sql": "SELECT e.school, CAST(COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR fb.name IS NOT NULL OR np.bool = 'pos' THEN e.name END) AS REAL) / COUNT(DISTINCT e.name) AS adverse_rate FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy fb ON e.name = fb.name LEFT JOIN no_payment_due np ON e.name = np.name GROUP BY e.school",
+          "generated_sql": "SELECT e.name AS student, e.school, CASE WHEN u.name IS NOT NULL THEN 1 ELSE 0 END AS unemployed, CASE WHEN b.name IS NOT NULL THEN 1 ELSE 0 END AS bankrupt, CASE WHEN npd.bool = 'neg' THEN 1 ELSE 0 END AS payment_due FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy b ON e.name = b.name LEFT JOIN no_payment_due npd ON e.name = npd.name",
+          "gold_sql_normalized": "SELECT e.school, CAST(COUNT(DISTINCT CASE WHEN u.name IS NOT NULL OR fb.name IS NOT NULL OR np.bool = 'pos' THEN e.name END) AS REAL) / COUNT(DISTINCT e.name) AS adverse_rate FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy fb ON e.name = fb.name LEFT JOIN no_payment_due np ON e.name = np.name GROUP BY e.school",
+          "generated_sql_normalized": "SELECT e.name AS student, e.school, CASE WHEN u.name IS NOT NULL THEN 1 ELSE 0 END AS unemployed, CASE WHEN b.name IS NOT NULL THEN 1 ELSE 0 END AS bankrupt, CASE WHEN npd.bool = 'neg' THEN 1 ELSE 0 END AS payment_due FROM enrolled e LEFT JOIN unemployed u ON e.name = u.name LEFT JOIN filed_for_bankrupcy b ON e.name = b.name LEFT JOIN no_payment_due npd ON e.name = npd.name",
+          "sql_text_match": false,
+          "gold_row_count": 6,
+          "gold_rows_preview": [
+            {
+              "school": "occ",
+              "adverse_rate": 0.6923076923076923
+            },
+            {
+              "school": "smc",
+              "adverse_rate": 0.6371681415929203
+            },
+            {
+              "school": "ucb",
+              "adverse_rate": 0.6629213483146067
+            }
+          ],
+          "generated_row_count": 1194,
+          "generated_rows_preview": [
+            {
+              "student": "student1",
+              "school": "occ",
+              "unemployed": 0,
+              "bankrupt": 0,
+              "payment_due": 0
+            },
+            {
+              "student": "student10",
+              "school": "smc",
+              "unemployed": 0,
+              "bankrupt": 0,
+              "payment_due": 1
+            },
+            {
+              "student": "student10",
+              "school": "ucb",
+              "unemployed": 0,
+              "bankrupt": 0,
+              "payment_due": 1
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=6, model=3582"
+          }
+        },
+        {
+          "db": "college_completion",
+          "gold_sql": "SELECT chronname, exp_award_value FROM institution_details WHERE exp_award_value IS NOT NULL",
+          "generated_sql": null,
+          "gold_sql_normalized": "SELECT chronname, exp_award_value FROM institution_details WHERE exp_award_value IS NOT NULL",
+          "generated_sql_normalized": null,
+          "sql_text_match": false,
+          "gold_row_count": 3798,
+          "gold_rows_preview": [
+            {
+              "chronname": "Alabama A&M University",
+              "exp_award_value": 105331
+            },
+            {
+              "chronname": "University of Alabama at Birmingham",
+              "exp_award_value": 136546
+            },
+            {
+              "chronname": "Amridge University",
+              "exp_award_value": 58414
+            }
+          ],
+          "generated_error": "no generated SQL for this database"
+        },
+        {
+          "db": "human_resources",
+          "gold_sql": "SELECT AVG(CAST(REPLACE(REPLACE(maxsalary, 'US$', ''), ',', '') AS REAL)) AS avg_maxsalary FROM position WHERE educationrequired = '4 year degree'",
+          "generated_sql": "SELECT positionID, positiontitle, educationrequired, maxsalary FROM position WHERE educationrequired = '4 year degree'",
+          "gold_sql_normalized": "SELECT AVG(CAST(REPLACE(REPLACE(maxsalary, 'US$', ''), ',', '') AS REAL)) AS avg_maxsalary FROM position WHERE educationrequired = '4 year degree'",
+          "generated_sql_normalized": "SELECT positionID, positiontitle, educationrequired, maxsalary FROM position WHERE educationrequired = '4 year degree'",
+          "sql_text_match": false,
+          "gold_row_count": 1,
+          "gold_rows_preview": [
+            {
+              "avg_maxsalary": 112500.0
+            }
+          ],
+          "generated_row_count": 2,
+          "generated_rows_preview": [
+            {
+              "positionID": 1,
+              "positiontitle": "Account Representative",
+              "educationrequired": "4 year degree",
+              "maxsalary": "US$75,000.00"
+            },
+            {
+              "positionID": 2,
+              "positiontitle": "Manager",
+              "educationrequired": "4 year degree",
+              "maxsalary": "US$150,000.00"
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=1, model=2"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 5517,
+        "output_tokens": 1131,
+        "llm_time_s": 18.695563077926636,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1590,
+            "output": 161,
+            "elapsed_s": 4.011860132217407
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 3927,
+            "output": 970,
+            "elapsed_s": 14.683702945709229
+          }
+        ],
+        "estimated_cost_usd": 0.051070000000000004
+      },
+      "elapsed_s": 53.11316204071045,
+      "error": null
+    },
+    {
+      "task_id": 6,
+      "difficulty": "moderate",
+      "question": "To examine whether a country's Formula 1 constructor competitiveness is associated with its domestic football league's scoring intensity, compute the Pearson correlation between country-level average constructor championship position and average total goals per match. Return the result as {\"r\": <float>}.",
+      "db_id": [
+        "formula_1",
+        "european_football_2"
+      ],
+      "selected_dbs": [],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": false,
+      "sql_attempts": 0,
+      "agent_answer": null,
+      "gold_answer": {
+        "r": 0.4536
+      },
+      "sql_plan": [],
+      "sql_comparison": [],
+      "token_usage": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "by_call": [],
+        "estimated_cost_usd": 0.0
+      },
+      "elapsed_s": 0.0,
+      "error": "LLM failed to produce answer or call tools"
+    },
+    {
+      "task_id": 7,
+      "difficulty": "simple",
+      "question": "To examine whether ZIP code infrastructure quality is associated with academic achievement, compute the Pearson correlation between county-level Standard ZIP code rate and county-level SAT high achiever rate across California counties. Return the result as {\"r\": <float>}.",
+      "db_id": [
+        "student_club",
+        "california_schools"
+      ],
+      "selected_dbs": [
+        "student_club",
+        "california_schools"
+      ],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "r": -0.1703
+      },
+      "gold_answer": {
+        "r": -0.1903
+      },
+      "sql_plan": [
+        {
+          "db": "student_club",
+          "sql": "SELECT county, state, SUM(CASE WHEN type = 'Standard' THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS standard_zip_rate FROM zip_code WHERE state = 'California' GROUP BY county, state",
+          "purpose": "Compute the per-county Standard ZIP code rate for California counties."
+        },
+        {
+          "db": "california_schools",
+          "sql": "SELECT cname AS county, SUM(COALESCE(NumGE1500, 0)) * 1.0 / NULLIF(SUM(COALESCE(NumTstTakr, 0)), 0) AS high_achiever_rate, SUM(COALESCE(NumGE1500, 0)) AS total_ge1500, SUM(COALESCE(NumTstTakr, 0)) AS total_takers FROM satscores WHERE cname IS NOT NULL GROUP BY cname",
+          "purpose": "Compute per-county SAT high achiever rate (NumGE1500 / NumTstTakr) across California counties."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "student_club",
+          "gold_sql": "SELECT REPLACE(county, ' County', '') AS county, CAST(SUM(CASE WHEN type = 'Standard' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS standard_rate FROM zip_code WHERE state = 'California' GROUP BY county",
+          "generated_sql": "SELECT county, state, SUM(CASE WHEN type = 'Standard' THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS standard_zip_rate FROM zip_code WHERE state = 'California' GROUP BY county, state",
+          "gold_sql_normalized": "SELECT REPLACE(county, ' County', '') AS county, CAST(SUM(CASE WHEN type = 'Standard' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS standard_rate FROM zip_code WHERE state = 'California' GROUP BY county",
+          "generated_sql_normalized": "SELECT county, state, SUM(CASE WHEN type = 'Standard' THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS standard_zip_rate FROM zip_code WHERE state = 'California' GROUP BY county, state",
+          "sql_text_match": false,
+          "gold_row_count": 59,
+          "gold_rows_preview": [
+            {
+              "county": null,
+              "standard_rate": 0.0
+            },
+            {
+              "county": "Alameda",
+              "standard_rate": 0.7
+            },
+            {
+              "county": "Alpine",
+              "standard_rate": 0.3333333333333333
+            }
+          ],
+          "generated_row_count": 59,
+          "generated_rows_preview": [
+            {
+              "county": null,
+              "state": "California",
+              "standard_zip_rate": 0.0
+            },
+            {
+              "county": "Alameda County",
+              "state": "California",
+              "standard_zip_rate": 0.7
+            },
+            {
+              "county": "Alpine County",
+              "state": "California",
+              "standard_zip_rate": 0.3333333333333333
+            }
+          ],
+          "row_count_match": true,
+          "value_comparison": {
+            "match": true
+          }
+        },
+        {
+          "db": "california_schools",
+          "gold_sql": "SELECT s.County, CAST(SUM(sat.NumGE1500) AS REAL) / SUM(sat.NumTstTakr) AS top_rate FROM schools s JOIN satscores sat ON s.CDSCode = sat.cds WHERE sat.NumTstTakr > 0 AND sat.NumGE1500 IS NOT NULL GROUP BY s.County",
+          "generated_sql": "SELECT cname AS county, SUM(COALESCE(NumGE1500, 0)) * 1.0 / NULLIF(SUM(COALESCE(NumTstTakr, 0)), 0) AS high_achiever_rate, SUM(COALESCE(NumGE1500, 0)) AS total_ge1500, SUM(COALESCE(NumTstTakr, 0)) AS total_takers FROM satscores WHERE cname IS NOT NULL GROUP BY cname",
+          "gold_sql_normalized": "SELECT s.County, CAST(SUM(sat.NumGE1500) AS REAL) / SUM(sat.NumTstTakr) AS top_rate FROM schools s JOIN satscores sat ON s.CDSCode = sat.cds WHERE sat.NumTstTakr > 0 AND sat.NumGE1500 IS NOT NULL GROUP BY s.County",
+          "generated_sql_normalized": "SELECT cname AS county, SUM(COALESCE(NumGE1500, 0)) * 1.0 / NULLIF(SUM(COALESCE(NumTstTakr, 0)), 0) AS high_achiever_rate, SUM(COALESCE(NumGE1500, 0)) AS total_ge1500, SUM(COALESCE(NumTstTakr, 0)) AS total_takers FROM satscores WHERE cname IS NOT NULL GROUP BY cname",
+          "sql_text_match": false,
+          "gold_row_count": 48,
+          "gold_rows_preview": [
+            {
+              "County": "Fresno",
+              "top_rate": 0.29013342398232345
+            },
+            {
+              "County": "Glenn",
+              "top_rate": 0.336734693877551
+            },
+            {
+              "County": "Humboldt",
+              "top_rate": 0.5901639344262295
+            }
+          ],
+          "generated_row_count": 57,
+          "generated_rows_preview": [
+            {
+              "county": "Alameda",
+              "high_achiever_rate": 0.5525375673376808,
+              "total_ge1500": 9744,
+              "total_takers": 17635
+            },
+            {
+              "county": "Amador",
+              "high_achiever_rate": 0.6185567010309279,
+              "total_ge1500": 120,
+              "total_takers": 194
+            },
+            {
+              "county": "Butte",
+              "high_achiever_rate": 0.5904088050314465,
+              "total_ge1500": 751,
+              "total_takers": 1272
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=48, model=171"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 11160,
+        "output_tokens": 837,
+        "llm_time_s": 13.716560125350952,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1405,
+            "output": 137,
+            "elapsed_s": 3.425784111022949
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 9755,
+            "output": 700,
+            "elapsed_s": 10.290776014328003
+          }
+        ],
+        "estimated_cost_usd": 0.072545
+      },
+      "elapsed_s": 61.87117290496826,
+      "error": null
+    },
+    {
+      "task_id": 8,
+      "difficulty": "moderate",
+      "question": "To examine whether British constructor dominance in Formula 1 correlates with English Premier League attacking play, compute the Pearson correlation between annual total points of British constructors and average home team goals per match in the English Premier League. Return the result as {\"r\": <float>, \"p\": <float>}.",
+      "db_id": [
+        "formula_1",
+        "european_football_2"
+      ],
+      "selected_dbs": [
+        "formula_1",
+        "european_football_2"
+      ],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "r": 0.2263,
+        "p": 0.5899
+      },
+      "gold_answer": {
+        "r": 0.2279,
+        "p": 0.5872
+      },
+      "sql_plan": [
+        {
+          "db": "formula_1",
+          "sql": "SELECT r.year AS year, SUM(cr.points) AS british_points FROM constructorResults cr JOIN races r ON cr.raceId = r.raceId JOIN constructors c ON cr.constructorId = c.constructorId WHERE c.nationality = 'British' AND r.year BETWEEN 2008 AND 2015 GROUP BY r.year ORDER BY r.year",
+          "purpose": "Annual total constructor points for British constructors in F1 between 2008 and 2015."
+        },
+        {
+          "db": "european_football_2",
+          "sql": "SELECT m.season AS season, m.home_team_goal AS home_team_goal FROM Match m JOIN League l ON m.league_id = l.id WHERE l.name = 'England Premier League' AND CAST(SUBSTR(m.season, 1, 4) AS INTEGER) BETWEEN 2008 AND 2015",
+          "purpose": "Per-match home team goals for English Premier League matches in seasons starting 2008 through 2015."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "formula_1",
+          "gold_sql": "SELECT r.year, SUM(cs.points) AS brit_pts FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId JOIN races r ON cs.raceId = r.raceId WHERE c.nationality = 'British' AND r.year BETWEEN 2008 AND 2015 GROUP BY r.year",
+          "generated_sql": "SELECT r.year AS year, SUM(cr.points) AS british_points FROM constructorResults cr JOIN races r ON cr.raceId = r.raceId JOIN constructors c ON cr.constructorId = c.constructorId WHERE c.nationality = 'British' AND r.year BETWEEN 2008 AND 2015 GROUP BY r.year ORDER BY r.year",
+          "gold_sql_normalized": "SELECT r.year, SUM(cs.points) AS brit_pts FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId JOIN races r ON cs.raceId = r.raceId WHERE c.nationality = 'British' AND r.year BETWEEN 2008 AND 2015 GROUP BY r.year",
+          "generated_sql_normalized": "SELECT r.year AS year, SUM(cr.points) AS british_points FROM constructorResults cr JOIN races r ON cr.raceId = r.raceId JOIN constructors c ON cr.constructorId = c.constructorId WHERE c.nationality = 'British' AND r.year BETWEEN 2008 AND 2015 GROUP BY r.year ORDER BY r.year",
+          "sql_text_match": false,
+          "gold_row_count": 8,
+          "gold_rows_preview": [
+            {
+              "year": 2008,
+              "brit_pts": 1792.0
+            },
+            {
+              "year": 2009,
+              "brit_pts": 2589.0
+            },
+            {
+              "year": 2010,
+              "brit_pts": 5281.0
+            }
+          ],
+          "generated_row_count": 8,
+          "generated_rows_preview": [
+            {
+              "year": 2008,
+              "british_points": 177.0
+            },
+            {
+              "year": 2009,
+              "british_points": 277.5
+            },
+            {
+              "year": 2010,
+              "british_points": 523.0
+            }
+          ],
+          "row_count_match": true,
+          "value_comparison": {
+            "match": false,
+            "reason": "16 value(s) differ",
+            "mismatches": [
+              {
+                "index": 0,
+                "gold": 1792.0,
+                "model": 177.0,
+                "diff": 1615.0
+              },
+              {
+                "index": 1,
+                "gold": 2008.0,
+                "model": 277.5,
+                "diff": 1730.5
+              },
+              {
+                "index": 2,
+                "gold": 2009.0,
+                "model": 362.0,
+                "diff": 1647.0
+              },
+              {
+                "index": 3,
+                "gold": 2010.0,
+                "model": 442.0,
+                "diff": 1568.0
+              },
+              {
+                "index": 4,
+                "gold": 2011.0,
+                "model": 502.0,
+                "diff": 1509.0
+              }
+            ]
+          }
+        },
+        {
+          "db": "european_football_2",
+          "gold_sql": "SELECT CAST(SUBSTR(m.season, 1, 4) AS INTEGER) AS season_year, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN League l ON m.league_id = l.id JOIN Country ct ON l.country_id = ct.id WHERE ct.name = 'England' AND CAST(SUBSTR(m.season, 1, 4) AS INTEGER) BETWEEN 2008 AND 2015 GROUP BY m.season",
+          "generated_sql": "SELECT m.season AS season, m.home_team_goal AS home_team_goal FROM Match m JOIN League l ON m.league_id = l.id WHERE l.name = 'England Premier League' AND CAST(SUBSTR(m.season, 1, 4) AS INTEGER) BETWEEN 2008 AND 2015",
+          "gold_sql_normalized": "SELECT CAST(SUBSTR(m.season, 1, 4) AS INTEGER) AS season_year, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN League l ON m.league_id = l.id JOIN Country ct ON l.country_id = ct.id WHERE ct.name = 'England' AND CAST(SUBSTR(m.season, 1, 4) AS INTEGER) BETWEEN 2008 AND 2015 GROUP BY m.season",
+          "generated_sql_normalized": "SELECT m.season AS season, m.home_team_goal AS home_team_goal FROM Match m JOIN League l ON m.league_id = l.id WHERE l.name = 'England Premier League' AND CAST(SUBSTR(m.season, 1, 4) AS INTEGER) BETWEEN 2008 AND 2015",
+          "sql_text_match": false,
+          "gold_row_count": 8,
+          "gold_rows_preview": [
+            {
+              "season_year": 2008,
+              "avg_home_goals": 1.4
+            },
+            {
+              "season_year": 2009,
+              "avg_home_goals": 1.6973684210526316
+            },
+            {
+              "season_year": 2010,
+              "avg_home_goals": 1.6236842105263158
+            }
+          ],
+          "generated_row_count": 3040,
+          "generated_rows_preview": [
+            {
+              "season": "2008/2009",
+              "home_team_goal": 1
+            },
+            {
+              "season": "2008/2009",
+              "home_team_goal": 1
+            },
+            {
+              "season": "2008/2009",
+              "home_team_goal": 0
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=16, model=3040"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 17132,
+        "output_tokens": 761,
+        "llm_time_s": 12.446724653244019,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1409,
+            "output": 143,
+            "elapsed_s": 3.4784748554229736
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 15723,
+            "output": 618,
+            "elapsed_s": 8.968249797821045
+          }
+        ],
+        "estimated_cost_usd": 0.100437
+      },
+      "elapsed_s": 80.22818994522095,
+      "error": null
+    },
+    {
+      "task_id": 9,
+      "difficulty": "challenging",
+      "question": "To compare carcinogenicity rates with clinical thrombosis rates, perform a two-proportion z-test between the proportion of nitrogen-containing molecules that are carcinogenic and the proportion of examined patients with confirmed thrombosis. Return the result as {\"p1\": <float>, \"p2\": <float>, \"z\": <float>}.",
+      "db_id": [
+        "toxicology",
+        "thrombosis_prediction"
+      ],
+      "selected_dbs": [
+        "toxicology",
+        "thrombosis_prediction"
+      ],
+      "final_score": 0.3333333333333333,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "p1": 0.3333333333333333,
+        "p2": 0.09925558312655088,
+        "z": 7.7777
+      },
+      "gold_answer": {
+        "p1": 0.4332,
+        "p2": 0.0993,
+        "z": 11.161
+      },
+      "sql_plan": [
+        {
+          "db": "toxicology",
+          "sql": "SELECT m.molecule_id, m.label, MAX(CASE WHEN a.element = 'n' THEN 1 ELSE 0 END) AS has_nitrogen FROM molecule m LEFT JOIN atom a ON a.molecule_id = m.molecule_id GROUP BY m.molecule_id, m.label",
+          "purpose": "Returns each molecule with its carcinogenic label and a flag for whether it contains at least one nitrogen atom."
+        },
+        {
+          "db": "thrombosis_prediction",
+          "sql": "SELECT \"ID\", \"Examination Date\", \"Thrombosis\" FROM Examination",
+          "purpose": "Returns per-examination Thrombosis values for all examined patients."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "toxicology",
+          "gold_sql": "SELECT SUM(CASE WHEN label = '+' THEN 1 ELSE 0 END) AS x1, COUNT(*) AS n1 FROM molecule WHERE molecule_id IN (SELECT DISTINCT molecule_id FROM atom WHERE element = 'n')",
+          "generated_sql": "SELECT m.molecule_id, m.label, MAX(CASE WHEN a.element = 'n' THEN 1 ELSE 0 END) AS has_nitrogen FROM molecule m LEFT JOIN atom a ON a.molecule_id = m.molecule_id GROUP BY m.molecule_id, m.label",
+          "gold_sql_normalized": "SELECT SUM(CASE WHEN label = '+' THEN 1 ELSE 0 END) AS x1, COUNT(*) AS n1 FROM molecule WHERE molecule_id IN (SELECT DISTINCT molecule_id FROM atom WHERE element = 'n')",
+          "generated_sql_normalized": "SELECT m.molecule_id, m.label, MAX(CASE WHEN a.element = 'n' THEN 1 ELSE 0 END) AS has_nitrogen FROM molecule m LEFT JOIN atom a ON a.molecule_id = m.molecule_id GROUP BY m.molecule_id, m.label",
+          "sql_text_match": false,
+          "gold_row_count": 1,
+          "gold_rows_preview": [
+            {
+              "x1": 81,
+              "n1": 187
+            }
+          ],
+          "generated_row_count": 343,
+          "generated_rows_preview": [
+            {
+              "molecule_id": "TR000",
+              "label": "+",
+              "has_nitrogen": 0
+            },
+            {
+              "molecule_id": "TR001",
+              "label": "+",
+              "has_nitrogen": 0
+            },
+            {
+              "molecule_id": "TR002",
+              "label": "-",
+              "has_nitrogen": 0
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=2, model=343"
+          }
+        },
+        {
+          "db": "thrombosis_prediction",
+          "gold_sql": "SELECT SUM(CASE WHEN Thrombosis >= 1 THEN 1 ELSE 0 END) AS x2, COUNT(*) AS n2 FROM Examination WHERE Thrombosis IS NOT NULL",
+          "generated_sql": "SELECT \"ID\", \"Examination Date\", \"Thrombosis\" FROM Examination",
+          "gold_sql_normalized": "SELECT SUM(CASE WHEN Thrombosis >= 1 THEN 1 ELSE 0 END) AS x2, COUNT(*) AS n2 FROM Examination WHERE Thrombosis IS NOT NULL",
+          "generated_sql_normalized": "SELECT \"ID\", \"Examination Date\", \"Thrombosis\" FROM Examination",
+          "sql_text_match": false,
+          "gold_row_count": 1,
+          "gold_rows_preview": [
+            {
+              "x2": 80,
+              "n2": 806
+            }
+          ],
+          "generated_row_count": 806,
+          "generated_rows_preview": [
+            {
+              "ID": 14872,
+              "Examination Date": "1997-05-27",
+              "Thrombosis": 1
+            },
+            {
+              "ID": 48473,
+              "Examination Date": "1992-12-21",
+              "Thrombosis": 0
+            },
+            {
+              "ID": 102490,
+              "Examination Date": "1995-04-20",
+              "Thrombosis": 0
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=2, model=1576"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 6564,
+        "output_tokens": 789,
+        "llm_time_s": 12.631128072738647,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1389,
+            "output": 149,
+            "elapsed_s": 3.6792352199554443
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 5175,
+            "output": 640,
+            "elapsed_s": 8.951892852783203
+          }
+        ],
+        "estimated_cost_usd": 0.048277
+      },
+      "elapsed_s": 51.77755308151245,
+      "error": null
+    },
+    {
+      "task_id": 10,
+      "difficulty": "challenging",
+      "question": "To examine whether a country's Formula 1 constructor winning tendency is associated with its domestic football league's scoring intensity, compute the Spearman correlation between country-level constructor win rate and average total goals per match. Return the result as {\"spearman_r\": <float>}.",
+      "db_id": [
+        "formula_1",
+        "european_football_2"
+      ],
+      "selected_dbs": [
+        "formula_1",
+        "european_football_2"
+      ],
+      "final_score": 1.0,
+      "correct": true,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "spearman_r": 0.8
+      },
+      "gold_answer": {
+        "spearman_r": 0.8
+      },
+      "sql_plan": [
+        {
+          "db": "formula_1",
+          "sql": "SELECT c.nationality AS nationality, COUNT(*) AS appearances, SUM(CASE WHEN r.positionOrder = 1 THEN 1 ELSE 0 END) AS wins FROM results r JOIN constructors c ON r.constructorId = c.constructorId GROUP BY c.nationality",
+          "purpose": "Returns per constructor-nationality total race appearances and total wins (positionOrder = 1) so we can compute win rate per country."
+        },
+        {
+          "db": "european_football_2",
+          "sql": "SELECT c.name AS country, m.home_team_goal, m.away_team_goal, (m.home_team_goal + m.away_team_goal) AS total_goals FROM Match m JOIN Country c ON m.country_id = c.id",
+          "purpose": "Returns per-match total goals along with the country name so we can compute the average total goals per match by country."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "formula_1",
+          "gold_sql": "SELECT c.nationality, CAST(SUM(cs.wins) AS REAL) / COUNT(*) AS win_rate FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality",
+          "generated_sql": "SELECT c.nationality AS nationality, COUNT(*) AS appearances, SUM(CASE WHEN r.positionOrder = 1 THEN 1 ELSE 0 END) AS wins FROM results r JOIN constructors c ON r.constructorId = c.constructorId GROUP BY c.nationality",
+          "gold_sql_normalized": "SELECT c.nationality, CAST(SUM(cs.wins) AS REAL) / COUNT(*) AS win_rate FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality",
+          "generated_sql_normalized": "SELECT c.nationality AS nationality, COUNT(*) AS appearances, SUM(CASE WHEN r.positionOrder = 1 THEN 1 ELSE 0 END) AS wins FROM results r JOIN constructors c ON r.constructorId = c.constructorId GROUP BY c.nationality",
+          "sql_text_match": false,
+          "gold_row_count": 23,
+          "gold_rows_preview": [
+            {
+              "nationality": "American",
+              "win_rate": 0.08433734939759036
+            },
+            {
+              "nationality": "Australian",
+              "win_rate": 0.0
+            },
+            {
+              "nationality": "Austrian",
+              "win_rate": 1.9915966386554622
+            }
+          ],
+          "generated_row_count": 24,
+          "generated_rows_preview": [
+            {
+              "nationality": "American",
+              "appearances": 577,
+              "wins": 13
+            },
+            {
+              "nationality": "Australian",
+              "appearances": 1,
+              "wins": 0
+            },
+            {
+              "nationality": "Austrian",
+              "appearances": 478,
+              "wins": 53
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=23, model=48"
+          }
+        },
+        {
+          "db": "european_football_2",
+          "gold_sql": "SELECT co.name, AVG(m.home_team_goal + m.away_team_goal) AS avg_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name",
+          "generated_sql": "SELECT c.name AS country, m.home_team_goal, m.away_team_goal, (m.home_team_goal + m.away_team_goal) AS total_goals FROM Match m JOIN Country c ON m.country_id = c.id",
+          "gold_sql_normalized": "SELECT co.name, AVG(m.home_team_goal + m.away_team_goal) AS avg_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name",
+          "generated_sql_normalized": "SELECT c.name AS country, m.home_team_goal, m.away_team_goal, (m.home_team_goal + m.away_team_goal) AS total_goals FROM Match m JOIN Country c ON m.country_id = c.id",
+          "sql_text_match": false,
+          "gold_row_count": 11,
+          "gold_rows_preview": [
+            {
+              "name": "Belgium",
+              "avg_goals": 2.8015046296296298
+            },
+            {
+              "name": "England",
+              "avg_goals": 2.710526315789474
+            },
+            {
+              "name": "France",
+              "avg_goals": 2.443092105263158
+            }
+          ],
+          "generated_row_count": 25979,
+          "generated_rows_preview": [
+            {
+              "country": "Belgium",
+              "home_team_goal": 1,
+              "away_team_goal": 1,
+              "total_goals": 2
+            },
+            {
+              "country": "Belgium",
+              "home_team_goal": 0,
+              "away_team_goal": 0,
+              "total_goals": 0
+            },
+            {
+              "country": "Belgium",
+              "home_team_goal": 0,
+              "away_team_goal": 3,
+              "total_goals": 3
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=11, model=77937"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 17217,
+        "output_tokens": 871,
+        "llm_time_s": 14.451510667800903,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1442,
+            "output": 159,
+            "elapsed_s": 4.04725193977356
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 15775,
+            "output": 712,
+            "elapsed_s": 10.404258728027344
+          }
+        ],
+        "estimated_cost_usd": 0.10338599999999999
+      },
+      "elapsed_s": 100.7619469165802,
+      "error": null
+    },
+    {
+      "task_id": 11,
+      "difficulty": "simple",
+      "question": "To examine whether a country's geographic position is associated with its domestic football league's defensive play, compute the Pearson correlation between a country's average F1 circuit latitude and its average goals conceded per match as the away team. Return the result as {\"r\": <float>}.",
+      "db_id": [
+        "formula_1",
+        "european_football_2"
+      ],
+      "selected_dbs": [
+        "formula_1",
+        "european_football_2"
+      ],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "r": -0.3206
+      },
+      "gold_answer": {
+        "r": 0.6134
+      },
+      "sql_plan": [
+        {
+          "db": "formula_1",
+          "sql": "SELECT country, lat FROM circuits WHERE lat IS NOT NULL",
+          "purpose": "Return per-circuit country and latitude so we can compute average latitude per country in pandas."
+        },
+        {
+          "db": "european_football_2",
+          "sql": "SELECT c.name AS country, m.away_team_goal FROM Match m JOIN Country c ON m.country_id = c.id WHERE m.away_team_goal IS NOT NULL",
+          "purpose": "Return per-match country name and away_team_goal for computing average away goals conceded per country."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "formula_1",
+          "gold_sql": "SELECT ci.country, AVG(ci.lat) AS avg_lat FROM circuits ci WHERE ci.lat IS NOT NULL GROUP BY ci.country",
+          "generated_sql": "SELECT country, lat FROM circuits WHERE lat IS NOT NULL",
+          "gold_sql_normalized": "SELECT ci.country, AVG(ci.lat) AS avg_lat FROM circuits ci WHERE ci.lat IS NOT NULL GROUP BY ci.country",
+          "generated_sql_normalized": "SELECT country, lat FROM circuits WHERE lat IS NOT NULL",
+          "sql_text_match": false,
+          "gold_row_count": 32,
+          "gold_rows_preview": [
+            {
+              "country": "Argentina",
+              "avg_lat": -34.6943
+            },
+            {
+              "country": "Australia",
+              "avg_lat": -34.9272
+            },
+            {
+              "country": "Austria",
+              "avg_lat": 47.21443333333334
+            }
+          ],
+          "generated_row_count": 72,
+          "generated_rows_preview": [
+            {
+              "country": "Malaysia",
+              "lat": 2.76083
+            },
+            {
+              "country": "Bahrain",
+              "lat": 26.0325
+            },
+            {
+              "country": "Spain",
+              "lat": 41.57
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=32, model=72"
+          }
+        },
+        {
+          "db": "european_football_2",
+          "gold_sql": "SELECT co.name, AVG(m.away_team_goal) AS avg_away_goals FROM Match m JOIN Country co ON m.country_id = co.id WHERE m.away_team_goal IS NOT NULL GROUP BY co.name",
+          "generated_sql": "SELECT c.name AS country, m.away_team_goal FROM Match m JOIN Country c ON m.country_id = c.id WHERE m.away_team_goal IS NOT NULL",
+          "gold_sql_normalized": "SELECT co.name, AVG(m.away_team_goal) AS avg_away_goals FROM Match m JOIN Country co ON m.country_id = co.id WHERE m.away_team_goal IS NOT NULL GROUP BY co.name",
+          "generated_sql_normalized": "SELECT c.name AS country, m.away_team_goal FROM Match m JOIN Country c ON m.country_id = c.id WHERE m.away_team_goal IS NOT NULL",
+          "sql_text_match": false,
+          "gold_row_count": 11,
+          "gold_rows_preview": [
+            {
+              "name": "Belgium",
+              "avg_away_goals": 1.1921296296296295
+            },
+            {
+              "name": "England",
+              "avg_away_goals": 1.1595394736842106
+            },
+            {
+              "name": "France",
+              "avg_away_goals": 1.0401315789473684
+            }
+          ],
+          "generated_row_count": 25979,
+          "generated_rows_preview": [
+            {
+              "country": "Belgium",
+              "away_team_goal": 1
+            },
+            {
+              "country": "Belgium",
+              "away_team_goal": 0
+            },
+            {
+              "country": "Belgium",
+              "away_team_goal": 3
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=11, model=25979"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 17159,
+        "output_tokens": 669,
+        "llm_time_s": 11.887165546417236,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1420,
+            "output": 153,
+            "elapsed_s": 4.381312608718872
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 15739,
+            "output": 516,
+            "elapsed_s": 7.505852937698364
+          }
+        ],
+        "estimated_cost_usd": 0.09815
+      },
+      "elapsed_s": 79.09388899803162,
+      "error": null
+    },
+    {
+      "task_id": 12,
+      "difficulty": "challenging",
+      "question": "To compare adverse outcome rates across two independent clinical and financial domains, perform a two-proportion z-test between the delinquency rate among active loans and the thrombosis rate among hospitalized patients. Return the result as {\"p1\": <float>, \"p2\": <float>, \"z\": <float>}.",
+      "db_id": [
+        "financial",
+        "thrombosis_prediction"
+      ],
+      "selected_dbs": [],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": false,
+      "sql_attempts": 0,
+      "agent_answer": null,
+      "gold_answer": {
+        "p1": 0.1004,
+        "p2": 0.2333,
+        "z": -2.263
+      },
+      "sql_plan": [],
+      "sql_comparison": [],
+      "token_usage": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "by_call": [],
+        "estimated_cost_usd": 0.0
+      },
+      "elapsed_s": 0.0,
+      "error": "1 validation error for DBSummary\n  Invalid JSON: EOF while parsing a value at line 1 column 0 [type=json_invalid, input_value='', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.12/v/json_invalid"
+    },
+    {
+      "task_id": 13,
+      "difficulty": "moderate",
+      "question": "To examine whether a country's Formula 1 constructor dominance is associated with its domestic football league's home advantage, compute the Pearson correlation between country-level total constructor championship points and average home team goals per match. Return the result as {\"r\": <float>}.",
+      "db_id": [
+        "formula_1",
+        "european_football_2"
+      ],
+      "selected_dbs": [
+        "formula_1",
+        "european_football_2"
+      ],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "r": -0.3
+      },
+      "gold_answer": {
+        "r": -0.4127
+      },
+      "sql_plan": [
+        {
+          "db": "formula_1",
+          "sql": "SELECT c.nationality AS nationality, SUM(cs.points) AS total_points FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality",
+          "purpose": "Returns total constructor championship points aggregated by constructor nationality (e.g., 'British', 'German', 'Italian')."
+        },
+        {
+          "db": "european_football_2",
+          "sql": "SELECT co.name AS country, m.home_team_goal AS home_team_goal FROM Match m JOIN Country co ON m.country_id = co.id",
+          "purpose": "Returns per-match home_team_goal values along with the country name so that average home goals per country can be computed in pandas."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "formula_1",
+          "gold_sql": "SELECT c.nationality, SUM(cs.points) AS total_points FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality",
+          "generated_sql": "SELECT c.nationality AS nationality, SUM(cs.points) AS total_points FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality",
+          "gold_sql_normalized": "SELECT c.nationality, SUM(cs.points) AS total_points FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality",
+          "generated_sql_normalized": "SELECT c.nationality AS nationality, SUM(cs.points) AS total_points FROM constructorStandings cs JOIN constructors c ON cs.constructorId = c.constructorId GROUP BY c.nationality",
+          "sql_text_match": false,
+          "gold_row_count": 23,
+          "gold_rows_preview": [
+            {
+              "nationality": "American",
+              "total_points": 1134.0
+            },
+            {
+              "nationality": "Australian",
+              "total_points": 0.0
+            },
+            {
+              "nationality": "Austrian",
+              "total_points": 36203.0
+            }
+          ],
+          "generated_row_count": 23,
+          "generated_rows_preview": [
+            {
+              "nationality": "American",
+              "total_points": 1134.0
+            },
+            {
+              "nationality": "Australian",
+              "total_points": 0.0
+            },
+            {
+              "nationality": "Austrian",
+              "total_points": 36203.0
+            }
+          ],
+          "row_count_match": true,
+          "value_comparison": {
+            "match": true
+          }
+        },
+        {
+          "db": "european_football_2",
+          "gold_sql": "SELECT co.name, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name",
+          "generated_sql": "SELECT co.name AS country, m.home_team_goal AS home_team_goal FROM Match m JOIN Country co ON m.country_id = co.id",
+          "gold_sql_normalized": "SELECT co.name, AVG(m.home_team_goal) AS avg_home_goals FROM Match m JOIN Country co ON m.country_id = co.id GROUP BY co.name",
+          "generated_sql_normalized": "SELECT co.name AS country, m.home_team_goal AS home_team_goal FROM Match m JOIN Country co ON m.country_id = co.id",
+          "sql_text_match": false,
+          "gold_row_count": 11,
+          "gold_rows_preview": [
+            {
+              "name": "Belgium",
+              "avg_home_goals": 1.609375
+            },
+            {
+              "name": "England",
+              "avg_home_goals": 1.550986842105263
+            },
+            {
+              "name": "France",
+              "avg_home_goals": 1.4029605263157894
+            }
+          ],
+          "generated_row_count": 25979,
+          "generated_rows_preview": [
+            {
+              "country": "Belgium",
+              "home_team_goal": 1
+            },
+            {
+              "country": "Belgium",
+              "home_team_goal": 0
+            },
+            {
+              "country": "Belgium",
+              "home_team_goal": 0
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=11, model=25979"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 17172,
+        "output_tokens": 836,
+        "llm_time_s": 12.514753103256226,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1425,
+            "output": 141,
+            "elapsed_s": 3.436997175216675
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 15747,
+            "output": 695,
+            "elapsed_s": 9.07775592803955
+          }
+        ],
+        "estimated_cost_usd": 0.10250000000000001
+      },
+      "elapsed_s": 90.32743406295776,
+      "error": null
+    },
+    {
+      "task_id": 14,
+      "difficulty": "moderate",
+      "question": "To examine whether national economic wealth is associated with Olympic success, compute the Pearson correlation between countries' GDP per capita and their total medal count at the 2008 Summer Olympics. Return the result as {\"r\": <float>}.",
+      "db_id": [
+        "olympics",
+        "world_development_indicators"
+      ],
+      "selected_dbs": [
+        "olympics",
+        "world_development_indicators"
+      ],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "r": 0.1919
+      },
+      "gold_answer": {
+        "r": 0.2608
+      },
+      "sql_plan": [
+        {
+          "db": "olympics",
+          "sql": "SELECT nr.region_name AS country, COUNT(*) AS medal_count FROM competitor_event ce JOIN medal m ON ce.medal_id = m.id JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE g.games_year = 2008 AND g.season = 'Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.region_name",
+          "purpose": "Total medal count (Gold/Silver/Bronze) per country at the 2008 Summer Olympics."
+        },
+        {
+          "db": "world_development_indicators",
+          "sql": "SELECT CountryName, CountryCode, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2008",
+          "purpose": "GDP per capita (current US$) for each country in 2008."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "olympics",
+          "gold_sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2008 AND g.season = 'Summer' GROUP BY nr.region_name",
+          "generated_sql": "SELECT nr.region_name AS country, COUNT(*) AS medal_count FROM competitor_event ce JOIN medal m ON ce.medal_id = m.id JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE g.games_year = 2008 AND g.season = 'Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.region_name",
+          "gold_sql_normalized": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2008 AND g.season = 'Summer' GROUP BY nr.region_name",
+          "generated_sql_normalized": "SELECT nr.region_name AS country, COUNT(*) AS medal_count FROM competitor_event ce JOIN medal m ON ce.medal_id = m.id JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE g.games_year = 2008 AND g.season = 'Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.region_name",
+          "sql_text_match": false,
+          "gold_row_count": 93,
+          "gold_rows_preview": [
+            {
+              "country": "Afghanistan",
+              "total_medals": 1
+            },
+            {
+              "country": "Algeria",
+              "total_medals": 2
+            },
+            {
+              "country": "Argentina",
+              "total_medals": 52
+            }
+          ],
+          "generated_row_count": 93,
+          "generated_rows_preview": [
+            {
+              "country": "Afghanistan",
+              "medal_count": 1
+            },
+            {
+              "country": "Algeria",
+              "medal_count": 2
+            },
+            {
+              "country": "Argentina",
+              "medal_count": 52
+            }
+          ],
+          "row_count_match": true,
+          "value_comparison": {
+            "match": true
+          }
+        },
+        {
+          "db": "world_development_indicators",
+          "gold_sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2008",
+          "generated_sql": "SELECT CountryName, CountryCode, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2008",
+          "gold_sql_normalized": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2008",
+          "generated_sql_normalized": "SELECT CountryName, CountryCode, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2008",
+          "sql_text_match": false,
+          "gold_row_count": 230,
+          "gold_rows_preview": [
+            {
+              "CountryName": "Arab World",
+              "gdp_per_capita": 6171
+            },
+            {
+              "CountryName": "Caribbean small states",
+              "gdp_per_capita": 9822
+            },
+            {
+              "CountryName": "Central Europe and the Baltics",
+              "gdp_per_capita": 14449
+            }
+          ],
+          "generated_row_count": 230,
+          "generated_rows_preview": [
+            {
+              "CountryName": "Arab World",
+              "CountryCode": "ARB",
+              "gdp_per_capita": 6171
+            },
+            {
+              "CountryName": "Caribbean small states",
+              "CountryCode": "CSS",
+              "gdp_per_capita": 9822
+            },
+            {
+              "CountryName": "Central Europe and the Baltics",
+              "CountryCode": "CEB",
+              "gdp_per_capita": 14449
+            }
+          ],
+          "row_count_match": true,
+          "value_comparison": {
+            "match": true
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 11200,
+        "output_tokens": 1126,
+        "llm_time_s": 18.099104166030884,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1531,
+            "output": 152,
+            "elapsed_s": 4.184786081314087
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 9669,
+            "output": 974,
+            "elapsed_s": 13.914318084716797
+          }
+        ],
+        "estimated_cost_usd": 0.079568
+      },
+      "elapsed_s": 127.10467886924744,
+      "error": null
+    },
+    {
+      "task_id": 15,
+      "difficulty": "challenging",
+      "question": "To examine how national economic wealth predicts Olympic success, compute the slope of the simple linear regression predicting total medal count from GDP per capita for the 2012 Summer Olympics. Return the result as {\"slope\": <float>}.",
+      "db_id": [
+        "olympics",
+        "world_development_indicators"
+      ],
+      "selected_dbs": [
+        "olympics",
+        "world_development_indicators"
+      ],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "slope": 0.0002809859691551831
+      },
+      "gold_answer": {
+        "slope": 0.00053765
+      },
+      "sql_plan": [
+        {
+          "db": "olympics",
+          "sql": "SELECT nr.region_name AS country, COUNT(*) AS medal_count FROM competitor_event ce JOIN medal m ON ce.medal_id = m.id JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person p ON gc.person_id = p.id JOIN person_region pr ON p.id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE g.games_name = '2012 Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.region_name",
+          "purpose": "Returns total medal count (gold/silver/bronze) per country for the 2012 Summer Olympics."
+        },
+        {
+          "db": "world_development_indicators",
+          "sql": "SELECT CountryName, CountryCode, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012",
+          "purpose": "Returns GDP per capita (current US$) for each country in 2012."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "olympics",
+          "gold_sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2012 AND g.season = 'Summer' GROUP BY nr.region_name",
+          "generated_sql": "SELECT nr.region_name AS country, COUNT(*) AS medal_count FROM competitor_event ce JOIN medal m ON ce.medal_id = m.id JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person p ON gc.person_id = p.id JOIN person_region pr ON p.id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE g.games_name = '2012 Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.region_name",
+          "gold_sql_normalized": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2012 AND g.season = 'Summer' GROUP BY nr.region_name",
+          "generated_sql_normalized": "SELECT nr.region_name AS country, COUNT(*) AS medal_count FROM competitor_event ce JOIN medal m ON ce.medal_id = m.id JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person p ON gc.person_id = p.id JOIN person_region pr ON p.id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE g.games_name = '2012 Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.region_name",
+          "sql_text_match": false,
+          "gold_row_count": 89,
+          "gold_rows_preview": [
+            {
+              "country": "Afghanistan",
+              "total_medals": 1
+            },
+            {
+              "country": "Algeria",
+              "total_medals": 1
+            },
+            {
+              "country": "Argentina",
+              "total_medals": 19
+            }
+          ],
+          "generated_row_count": 89,
+          "generated_rows_preview": [
+            {
+              "country": "Afghanistan",
+              "medal_count": 1
+            },
+            {
+              "country": "Algeria",
+              "medal_count": 1
+            },
+            {
+              "country": "Argentina",
+              "medal_count": 19
+            }
+          ],
+          "row_count_match": true,
+          "value_comparison": {
+            "match": true
+          }
+        },
+        {
+          "db": "world_development_indicators",
+          "gold_sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012",
+          "generated_sql": "SELECT CountryName, CountryCode, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012",
+          "gold_sql_normalized": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012",
+          "generated_sql_normalized": "SELECT CountryName, CountryCode, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012",
+          "sql_text_match": false,
+          "gold_row_count": 225,
+          "gold_rows_preview": [
+            {
+              "CountryName": "Arab World",
+              "gdp_per_capita": 7465
+            },
+            {
+              "CountryName": "Caribbean small states",
+              "gdp_per_capita": 9586
+            },
+            {
+              "CountryName": "Central Europe and the Baltics",
+              "gdp_per_capita": 12981
+            }
+          ],
+          "generated_row_count": 225,
+          "generated_rows_preview": [
+            {
+              "CountryName": "Arab World",
+              "CountryCode": "ARB",
+              "gdp_per_capita": 7465
+            },
+            {
+              "CountryName": "Caribbean small states",
+              "CountryCode": "CSS",
+              "gdp_per_capita": 9586
+            },
+            {
+              "CountryName": "Central Europe and the Baltics",
+              "CountryCode": "CEB",
+              "gdp_per_capita": 12981
+            }
+          ],
+          "row_count_match": true,
+          "value_comparison": {
+            "match": true
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 11145,
+        "output_tokens": 1112,
+        "llm_time_s": 17.477742195129395,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1508,
+            "output": 146,
+            "elapsed_s": 4.120885133743286
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 9637,
+            "output": 966,
+            "elapsed_s": 13.356857061386108
+          }
+        ],
+        "estimated_cost_usd": 0.079049
+      },
+      "elapsed_s": 149.01234197616577,
+      "error": null
+    },
+    {
+      "task_id": 16,
+      "difficulty": "challenging",
+      "question": "To model the joint effect of economic wealth and population size on Olympic performance, fit an OLS multiple linear regression predicting each country's total medal count from GDP per capita and total population for the 2012 Summer Olympics. Return the intercept and two coefficients as {\"beta_0\": <float>, \"beta_1\": <float>, \"beta_2\": <float>}.",
+      "db_id": [
+        "olympics",
+        "world_development_indicators"
+      ],
+      "selected_dbs": [
+        "olympics",
+        "world_development_indicators"
+      ],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "beta_0": 4.10190564,
+        "beta_1": 0.0009399,
+        "beta_2": 6e-08
+      },
+      "gold_answer": {
+        "beta_0": 5.5546,
+        "beta_1": 0.0006213738,
+        "beta_2": 7.29e-08
+      },
+      "sql_plan": [
+        {
+          "db": "olympics",
+          "sql": "SELECT nr.region_name AS country, COUNT(*) AS medal_count FROM competitor_event ce JOIN medal m ON ce.medal_id = m.id JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE g.games_name = '2012 Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.region_name",
+          "purpose": "Total medal count (gold/silver/bronze) per country at the 2012 Summer Olympics."
+        },
+        {
+          "db": "world_development_indicators",
+          "sql": "SELECT CountryName, CountryCode, IndicatorCode, Value FROM Indicators WHERE Year = 2012 AND IndicatorCode IN ('NY.GDP.PCAP.CD','SP.POP.TOTL')",
+          "purpose": "GDP per capita and total population for each country in 2012."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "olympics",
+          "gold_sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2012 AND g.season = 'Summer' GROUP BY nr.region_name",
+          "generated_sql": "SELECT nr.region_name AS country, COUNT(*) AS medal_count FROM competitor_event ce JOIN medal m ON ce.medal_id = m.id JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE g.games_name = '2012 Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.region_name",
+          "gold_sql_normalized": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2012 AND g.season = 'Summer' GROUP BY nr.region_name",
+          "generated_sql_normalized": "SELECT nr.region_name AS country, COUNT(*) AS medal_count FROM competitor_event ce JOIN medal m ON ce.medal_id = m.id JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE g.games_name = '2012 Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.region_name",
+          "sql_text_match": false,
+          "gold_row_count": 89,
+          "gold_rows_preview": [
+            {
+              "country": "Afghanistan",
+              "total_medals": 1
+            },
+            {
+              "country": "Algeria",
+              "total_medals": 1
+            },
+            {
+              "country": "Argentina",
+              "total_medals": 19
+            }
+          ],
+          "generated_row_count": 89,
+          "generated_rows_preview": [
+            {
+              "country": "Afghanistan",
+              "medal_count": 1
+            },
+            {
+              "country": "Algeria",
+              "medal_count": 1
+            },
+            {
+              "country": "Argentina",
+              "medal_count": 19
+            }
+          ],
+          "row_count_match": true,
+          "value_comparison": {
+            "match": true
+          }
+        },
+        {
+          "db": "world_development_indicators",
+          "gold_sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012",
+          "generated_sql": "SELECT CountryName, CountryCode, IndicatorCode, Value FROM Indicators WHERE Year = 2012 AND IndicatorCode IN ('NY.GDP.PCAP.CD','SP.POP.TOTL')",
+          "gold_sql_normalized": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2012",
+          "generated_sql_normalized": "SELECT CountryName, CountryCode, IndicatorCode, Value FROM Indicators WHERE Year = 2012 AND IndicatorCode IN ('NY.GDP.PCAP.CD','SP.POP.TOTL')",
+          "sql_text_match": false,
+          "gold_row_count": 225,
+          "gold_rows_preview": [
+            {
+              "CountryName": "Arab World",
+              "gdp_per_capita": 7465
+            },
+            {
+              "CountryName": "Caribbean small states",
+              "gdp_per_capita": 9586
+            },
+            {
+              "CountryName": "Central Europe and the Baltics",
+              "gdp_per_capita": 12981
+            }
+          ],
+          "generated_row_count": 472,
+          "generated_rows_preview": [
+            {
+              "CountryName": "Arab World",
+              "CountryCode": "ARB",
+              "IndicatorCode": "NY.GDP.PCAP.CD",
+              "Value": 7465
+            },
+            {
+              "CountryName": "Arab World",
+              "CountryCode": "ARB",
+              "IndicatorCode": "SP.POP.TOTL",
+              "Value": 368914383
+            },
+            {
+              "CountryName": "Caribbean small states",
+              "CountryCode": "CSS",
+              "IndicatorCode": "NY.GDP.PCAP.CD",
+              "Value": 9586
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=225, model=472"
+          }
+        },
+        {
+          "db": "world_development_indicators",
+          "gold_sql": "SELECT CountryName, Value AS population FROM Indicators WHERE IndicatorCode = 'SP.POP.TOTL' AND Year = 2012",
+          "generated_sql": "SELECT CountryName, CountryCode, IndicatorCode, Value FROM Indicators WHERE Year = 2012 AND IndicatorCode IN ('NY.GDP.PCAP.CD','SP.POP.TOTL')",
+          "gold_sql_normalized": "SELECT CountryName, Value AS population FROM Indicators WHERE IndicatorCode = 'SP.POP.TOTL' AND Year = 2012",
+          "generated_sql_normalized": "SELECT CountryName, CountryCode, IndicatorCode, Value FROM Indicators WHERE Year = 2012 AND IndicatorCode IN ('NY.GDP.PCAP.CD','SP.POP.TOTL')",
+          "sql_text_match": false,
+          "gold_row_count": 247,
+          "gold_rows_preview": [
+            {
+              "CountryName": "Arab World",
+              "population": 368914383
+            },
+            {
+              "CountryName": "Caribbean small states",
+              "population": 6937108
+            },
+            {
+              "CountryName": "Central Europe and the Baltics",
+              "population": 103935318
+            }
+          ],
+          "generated_row_count": 472,
+          "generated_rows_preview": [
+            {
+              "CountryName": "Arab World",
+              "CountryCode": "ARB",
+              "IndicatorCode": "NY.GDP.PCAP.CD",
+              "Value": 7465
+            },
+            {
+              "CountryName": "Arab World",
+              "CountryCode": "ARB",
+              "IndicatorCode": "SP.POP.TOTL",
+              "Value": 368914383
+            },
+            {
+              "CountryName": "Caribbean small states",
+              "CountryCode": "CSS",
+              "IndicatorCode": "NY.GDP.PCAP.CD",
+              "Value": 9586
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=247, model=472"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 11265,
+        "output_tokens": 1198,
+        "llm_time_s": 18.054482221603394,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1560,
+            "output": 145,
+            "elapsed_s": 3.826669216156006
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 9705,
+            "output": 1053,
+            "elapsed_s": 14.227813005447388
+          }
+        ],
+        "estimated_cost_usd": 0.081705
+      },
+      "elapsed_s": 195.43841409683228,
+      "error": null
+    },
+    {
+      "task_id": 17,
+      "difficulty": "simple",
+      "question": "To examine whether days with more crime activity are associated with different social media emotional tones, compute the Pearson correlation between the total crime count per weekday and the average tweet sentiment per weekday. Return the result as {\"r\": <float>}.",
+      "db_id": [
+        "chicago_crime",
+        "social_media"
+      ],
+      "selected_dbs": [
+        "chicago_crime",
+        "social_media"
+      ],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "r": 0.0
+      },
+      "gold_answer": {
+        "r": 0.419
+      },
+      "sql_plan": [
+        {
+          "db": "chicago_crime",
+          "sql": "SELECT date FROM Crime WHERE date IS NOT NULL",
+          "purpose": "Return raw crime date strings so pandas can parse weekday and aggregate counts per weekday."
+        },
+        {
+          "db": "social_media",
+          "sql": "SELECT Weekday, Sentiment FROM twitter WHERE Sentiment IS NOT NULL AND Weekday IS NOT NULL",
+          "purpose": "Return per-tweet weekday and sentiment values for averaging by weekday."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "chicago_crime",
+          "gold_sql": "SELECT strftime('%w', SUBSTR(date, INSTR(date,'/')+INSTR(SUBSTR(date,INSTR(date,'/')+1),'/')+1, 4) || '-' || PRINTF('%02d', CAST(SUBSTR(date, 1, INSTR(date,'/')-1) AS INT)) || '-' || PRINTF('%02d', CAST(SUBSTR(SUBSTR(date,INSTR(date,'/')+1), 1, INSTR(SUBSTR(date,INSTR(date,'/')+1),'/')-1) AS INT))) AS dow, COUNT(*) AS crime_count FROM Crime GROUP BY dow",
+          "generated_sql": "SELECT date FROM Crime WHERE date IS NOT NULL",
+          "gold_sql_normalized": "SELECT strftime('%w', SUBSTR(date, INSTR(date,'/')+INSTR(SUBSTR(date,INSTR(date,'/')+1),'/')+1, 4) || '-' || PRINTF('%02d', CAST(SUBSTR(date, 1, INSTR(date,'/')-1) AS INT)) || '-' || PRINTF('%02d', CAST(SUBSTR(SUBSTR(date,INSTR(date,'/')+1), 1, INSTR(SUBSTR(date,INSTR(date,'/')+1),'/')-1) AS INT))) AS dow, COUNT(*) AS crime_count FROM Crime GROUP BY dow",
+          "generated_sql_normalized": "SELECT date FROM Crime WHERE date IS NOT NULL",
+          "sql_text_match": false,
+          "gold_row_count": 7,
+          "gold_rows_preview": [
+            {
+              "dow": "0",
+              "crime_count": 37069
+            },
+            {
+              "dow": "1",
+              "crime_count": 38619
+            },
+            {
+              "dow": "2",
+              "crime_count": 37517
+            }
+          ],
+          "generated_row_count": 268002,
+          "generated_rows_preview": [
+            {
+              "date": "1/1/2018 2:46"
+            },
+            {
+              "date": "1/1/2018 11:33"
+            },
+            {
+              "date": "1/1/2018 18:27"
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=14, model=0"
+          }
+        },
+        {
+          "db": "social_media",
+          "gold_sql": "SELECT Weekday, AVG(Sentiment) AS avg_sentiment FROM twitter GROUP BY Weekday",
+          "generated_sql": "SELECT Weekday, Sentiment FROM twitter WHERE Sentiment IS NOT NULL AND Weekday IS NOT NULL",
+          "gold_sql_normalized": "SELECT Weekday, AVG(Sentiment) AS avg_sentiment FROM twitter GROUP BY Weekday",
+          "generated_sql_normalized": "SELECT Weekday, Sentiment FROM twitter WHERE Sentiment IS NOT NULL AND Weekday IS NOT NULL",
+          "sql_text_match": false,
+          "gold_row_count": 8,
+          "gold_rows_preview": [
+            {
+              "Weekday": null,
+              "avg_sentiment": null
+            },
+            {
+              "Weekday": "Friday",
+              "avg_sentiment": 0.43766686966040125
+            },
+            {
+              "Weekday": "Monday",
+              "avg_sentiment": 0.4041061656739751
+            }
+          ],
+          "generated_row_count": 99900,
+          "generated_rows_preview": [
+            {
+              "Weekday": "Thursday",
+              "Sentiment": 0.0
+            },
+            {
+              "Weekday": "Thursday",
+              "Sentiment": 2.0
+            },
+            {
+              "Weekday": "Thursday",
+              "Sentiment": 0.0
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=7, model=99900"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 3,
+        "input_tokens": 9550,
+        "output_tokens": 886,
+        "llm_time_s": 14.286825180053711,
+        "by_call": [
+          {
+            "model": "claude-haiku-4-5",
+            "input": 1879,
+            "output": 267,
+            "elapsed_s": 3.0105600357055664
+          },
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1433,
+            "output": 128,
+            "elapsed_s": 3.8840460777282715
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 6238,
+            "output": 491,
+            "elapsed_s": 7.392219066619873
+          }
+        ],
+        "estimated_cost_usd": 0.052255199999999995
+      },
+      "elapsed_s": 97.95054483413696,
+      "error": null
+    },
+    {
+      "task_id": 18,
+      "difficulty": "moderate",
+      "question": "To examine whether wealthier countries produce more NBA talent, compute the Spearman correlation between the number of NBA players born in each country and that country's GDP per capita. Return the result as {\"spearman_r\": <float>}.",
+      "db_id": [
+        "professional_basketball",
+        "world_development_indicators"
+      ],
+      "selected_dbs": [
+        "professional_basketball",
+        "world_development_indicators"
+      ],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "spearman_r": 0.0249
+      },
+      "gold_answer": {
+        "spearman_r": 0.0474
+      },
+      "sql_plan": [
+        {
+          "db": "professional_basketball",
+          "sql": "SELECT birthCountry AS ioc_code, COUNT(DISTINCT playerID) AS player_count FROM players WHERE birthCountry IS NOT NULL AND birthCountry <> '' AND playerID IN (SELECT DISTINCT playerID FROM players_teams WHERE lgID = 'NBA') GROUP BY birthCountry",
+          "purpose": "Number of distinct NBA players (lgID='NBA') per birth country, keyed by IOC 3-letter code."
+        },
+        {
+          "db": "world_development_indicators",
+          "sql": "SELECT c.CountryCode AS wdi_code, c.ShortName AS country_name, i.Value AS gdp_per_capita FROM Indicators i JOIN Country c ON c.CountryCode = i.CountryCode WHERE i.IndicatorCode = 'NY.GDP.PCAP.CD' AND i.Year = 2000 AND i.Value IS NOT NULL",
+          "purpose": "GDP per capita (NY.GDP.PCAP.CD) in 2000 for each WDI country, with country code and short name."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "professional_basketball",
+          "gold_sql": "SELECT p.birthCountry, COUNT(DISTINCT p.playerID) AS player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL GROUP BY p.birthCountry ORDER BY player_count DESC",
+          "generated_sql": "SELECT birthCountry AS ioc_code, COUNT(DISTINCT playerID) AS player_count FROM players WHERE birthCountry IS NOT NULL AND birthCountry <> '' AND playerID IN (SELECT DISTINCT playerID FROM players_teams WHERE lgID = 'NBA') GROUP BY birthCountry",
+          "gold_sql_normalized": "SELECT p.birthCountry, COUNT(DISTINCT p.playerID) AS player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL GROUP BY p.birthCountry ORDER BY player_count DESC",
+          "generated_sql_normalized": "SELECT birthCountry AS ioc_code, COUNT(DISTINCT playerID) AS player_count FROM players WHERE birthCountry IS NOT NULL AND birthCountry <> '' AND playerID IN (SELECT DISTINCT playerID FROM players_teams WHERE lgID = 'NBA') GROUP BY birthCountry",
+          "sql_text_match": false,
+          "gold_row_count": 80,
+          "gold_rows_preview": [
+            {
+              "birthCountry": "USA",
+              "player_count": 3099
+            },
+            {
+              "birthCountry": "YUG",
+              "player_count": 23
+            },
+            {
+              "birthCountry": "FRA",
+              "player_count": 18
+            }
+          ],
+          "generated_row_count": 80,
+          "generated_rows_preview": [
+            {
+              "ioc_code": "ARG",
+              "player_count": 8
+            },
+            {
+              "ioc_code": "AUS",
+              "player_count": 11
+            },
+            {
+              "ioc_code": "BAH",
+              "player_count": 3
+            }
+          ],
+          "row_count_match": true,
+          "value_comparison": {
+            "match": true
+          }
+        },
+        {
+          "db": "world_development_indicators",
+          "gold_sql": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2000",
+          "generated_sql": "SELECT c.CountryCode AS wdi_code, c.ShortName AS country_name, i.Value AS gdp_per_capita FROM Indicators i JOIN Country c ON c.CountryCode = i.CountryCode WHERE i.IndicatorCode = 'NY.GDP.PCAP.CD' AND i.Year = 2000 AND i.Value IS NOT NULL",
+          "gold_sql_normalized": "SELECT CountryName, Value AS gdp_per_capita FROM Indicators WHERE IndicatorCode = 'NY.GDP.PCAP.CD' AND Year = 2000",
+          "generated_sql_normalized": "SELECT c.CountryCode AS wdi_code, c.ShortName AS country_name, i.Value AS gdp_per_capita FROM Indicators i JOIN Country c ON c.CountryCode = i.CountryCode WHERE i.IndicatorCode = 'NY.GDP.PCAP.CD' AND i.Year = 2000 AND i.Value IS NOT NULL",
+          "sql_text_match": false,
+          "gold_row_count": 231,
+          "gold_rows_preview": [
+            {
+              "CountryName": "Arab World",
+              "gdp_per_capita": 2597
+            },
+            {
+              "CountryName": "Caribbean small states",
+              "gdp_per_capita": 4989
+            },
+            {
+              "CountryName": "Central Europe and the Baltics",
+              "gdp_per_capita": 3943
+            }
+          ],
+          "generated_row_count": 231,
+          "generated_rows_preview": [
+            {
+              "wdi_code": "ARB",
+              "country_name": "Arab World",
+              "gdp_per_capita": 2597
+            },
+            {
+              "wdi_code": "CSS",
+              "country_name": "Caribbean small states",
+              "gdp_per_capita": 4989
+            },
+            {
+              "wdi_code": "CEB",
+              "country_name": "Central Europe and the Baltics",
+              "gdp_per_capita": 3943
+            }
+          ],
+          "row_count_match": true,
+          "value_comparison": {
+            "match": true
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 3,
+        "input_tokens": 21774,
+        "output_tokens": 1406,
+        "llm_time_s": 21.85278558731079,
+        "by_call": [
+          {
+            "model": "claude-haiku-4-5",
+            "input": 5841,
+            "output": 317,
+            "elapsed_s": 4.046411991119385
+          },
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1484,
+            "output": 130,
+            "elapsed_s": 3.098454713821411
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 14449,
+            "output": 959,
+            "elapsed_s": 14.707918882369995
+          }
+        ],
+        "estimated_cost_usd": 0.1085628
+      },
+      "elapsed_s": 229.0625638961792,
+      "error": null
+    },
+    {
+      "task_id": 19,
+      "difficulty": "moderate",
+      "question": "To examine whether countries that excel at basketball also perform well at the Olympics, compute the Pearson correlation between the number of NBA players born in each country and that country's total medal count at the 2000 Summer Olympics. Return the result as {\"r\": <float>}.",
+      "db_id": [
+        "professional_basketball",
+        "olympics"
+      ],
+      "selected_dbs": [
+        "professional_basketball",
+        "olympics"
+      ],
+      "final_score": 1.0,
+      "correct": true,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "r": 0.5982
+      },
+      "gold_answer": {
+        "r": 0.5893
+      },
+      "sql_plan": [
+        {
+          "db": "professional_basketball",
+          "sql": "SELECT p.birthCountry AS noc, COUNT(DISTINCT p.playerID) AS nba_player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL AND p.birthCountry <> '' GROUP BY p.birthCountry",
+          "purpose": "Counts distinct NBA players per birth country (IOC 3-letter code)."
+        },
+        {
+          "db": "olympics",
+          "sql": "SELECT nr.noc AS noc, nr.region_name AS region_name, COUNT(*) AS medal_count FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id JOIN medal m ON ce.medal_id = m.id WHERE g.games_year = 2000 AND g.season = 'Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.noc, nr.region_name",
+          "purpose": "Total medal count (Gold/Silver/Bronze) per country (NOC) at the 2000 Summer Olympics."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "professional_basketball",
+          "gold_sql": "SELECT p.birthCountry, COUNT(DISTINCT p.playerID) AS player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL GROUP BY p.birthCountry ORDER BY player_count DESC",
+          "generated_sql": "SELECT p.birthCountry AS noc, COUNT(DISTINCT p.playerID) AS nba_player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL AND p.birthCountry <> '' GROUP BY p.birthCountry",
+          "gold_sql_normalized": "SELECT p.birthCountry, COUNT(DISTINCT p.playerID) AS player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL GROUP BY p.birthCountry ORDER BY player_count DESC",
+          "generated_sql_normalized": "SELECT p.birthCountry AS noc, COUNT(DISTINCT p.playerID) AS nba_player_count FROM players p JOIN players_teams pt ON p.playerID = pt.playerID WHERE pt.lgID = 'NBA' AND p.birthCountry IS NOT NULL AND p.birthCountry <> '' GROUP BY p.birthCountry",
+          "sql_text_match": false,
+          "gold_row_count": 80,
+          "gold_rows_preview": [
+            {
+              "birthCountry": "USA",
+              "player_count": 3099
+            },
+            {
+              "birthCountry": "YUG",
+              "player_count": 23
+            },
+            {
+              "birthCountry": "FRA",
+              "player_count": 18
+            }
+          ],
+          "generated_row_count": 80,
+          "generated_rows_preview": [
+            {
+              "noc": "ARG",
+              "nba_player_count": 8
+            },
+            {
+              "noc": "AUS",
+              "nba_player_count": 11
+            },
+            {
+              "noc": "BAH",
+              "nba_player_count": 3
+            }
+          ],
+          "row_count_match": true,
+          "value_comparison": {
+            "match": true
+          }
+        },
+        {
+          "db": "olympics",
+          "gold_sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2000 AND g.season = 'Summer' GROUP BY nr.region_name",
+          "generated_sql": "SELECT nr.noc AS noc, nr.region_name AS region_name, COUNT(*) AS medal_count FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id JOIN medal m ON ce.medal_id = m.id WHERE g.games_year = 2000 AND g.season = 'Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.noc, nr.region_name",
+          "gold_sql_normalized": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) AND g.games_year = 2000 AND g.season = 'Summer' GROUP BY nr.region_name",
+          "generated_sql_normalized": "SELECT nr.noc AS noc, nr.region_name AS region_name, COUNT(*) AS medal_count FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN games g ON gc.games_id = g.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id JOIN medal m ON ce.medal_id = m.id WHERE g.games_year = 2000 AND g.season = 'Summer' AND m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.noc, nr.region_name",
+          "sql_text_match": false,
+          "gold_row_count": 90,
+          "gold_rows_preview": [
+            {
+              "country": "Albania",
+              "total_medals": 1
+            },
+            {
+              "country": "Algeria",
+              "total_medals": 5
+            },
+            {
+              "country": "Argentina",
+              "total_medals": 20
+            }
+          ],
+          "generated_row_count": 90,
+          "generated_rows_preview": [
+            {
+              "noc": "ALB",
+              "region_name": "Albania",
+              "medal_count": 1
+            },
+            {
+              "noc": "ALG",
+              "region_name": "Algeria",
+              "medal_count": 5
+            },
+            {
+              "noc": "ARG",
+              "region_name": "Argentina",
+              "medal_count": 20
+            }
+          ],
+          "row_count_match": true,
+          "value_comparison": {
+            "match": true
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 11641,
+        "output_tokens": 923,
+        "llm_time_s": 14.496450424194336,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1451,
+            "output": 142,
+            "elapsed_s": 3.7540881633758545
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 10190,
+            "output": 781,
+            "elapsed_s": 10.742362260818481
+          }
+        ],
+        "estimated_cost_usd": 0.076958
+      },
+      "elapsed_s": 35.757503032684326,
+      "error": null
+    },
+    {
+      "task_id": 20,
+      "difficulty": "moderate",
+      "question": "To examine whether wealthier nations win more Olympic medals, run a Welch's t-test comparing all-time Olympic medal counts between High income and Low income countries. Return the result as {\"t\": <float>, \"p\": <float>}.",
+      "db_id": [
+        "olympics",
+        "world_development_indicators"
+      ],
+      "selected_dbs": [
+        "olympics",
+        "world_development_indicators"
+      ],
+      "final_score": 0.5,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "t": 4.0927,
+        "p": 0.0001
+      },
+      "gold_answer": {
+        "t": 4.0167,
+        "p": 0.0002
+      },
+      "sql_plan": [
+        {
+          "db": "olympics",
+          "sql": "SELECT nr.region_name AS region_name, nr.noc AS noc, COUNT(ce.medal_id) AS medal_count FROM noc_region nr JOIN person_region pr ON pr.region_id = nr.id JOIN games_competitor gc ON gc.person_id = pr.person_id JOIN competitor_event ce ON ce.competitor_id = gc.id JOIN medal m ON m.id = ce.medal_id WHERE m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.id, nr.region_name, nr.noc",
+          "purpose": "Per-country all-time Olympic medal counts (Gold+Silver+Bronze) keyed by NOC region_name."
+        },
+        {
+          "db": "world_development_indicators",
+          "sql": "SELECT ShortName, TableName, LongName, CountryCode, IncomeGroup FROM Country WHERE IncomeGroup IS NOT NULL AND IncomeGroup <> '' AND (IncomeGroup LIKE 'High income%' OR IncomeGroup = 'Low income' OR IncomeGroup = 'Lower middle income')",
+          "purpose": "Country names and income groups for High income vs Low/Lower middle income classification."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "olympics",
+          "gold_sql": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) GROUP BY nr.region_name",
+          "generated_sql": "SELECT nr.region_name AS region_name, nr.noc AS noc, COUNT(ce.medal_id) AS medal_count FROM noc_region nr JOIN person_region pr ON pr.region_id = nr.id JOIN games_competitor gc ON gc.person_id = pr.person_id JOIN competitor_event ce ON ce.competitor_id = gc.id JOIN medal m ON m.id = ce.medal_id WHERE m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.id, nr.region_name, nr.noc",
+          "gold_sql_normalized": "SELECT nr.region_name AS country, COUNT(*) AS total_medals FROM competitor_event ce JOIN games_competitor gc ON ce.competitor_id = gc.id JOIN person_region pr ON gc.person_id = pr.person_id JOIN noc_region nr ON pr.region_id = nr.id WHERE ce.medal_id IN (1, 2, 3) GROUP BY nr.region_name",
+          "generated_sql_normalized": "SELECT nr.region_name AS region_name, nr.noc AS noc, COUNT(ce.medal_id) AS medal_count FROM noc_region nr JOIN person_region pr ON pr.region_id = nr.id JOIN games_competitor gc ON gc.person_id = pr.person_id JOIN competitor_event ce ON ce.competitor_id = gc.id JOIN medal m ON m.id = ce.medal_id WHERE m.medal_name IN ('Gold','Silver','Bronze') GROUP BY nr.id, nr.region_name, nr.noc",
+          "sql_text_match": false,
+          "gold_row_count": 150,
+          "gold_rows_preview": [
+            {
+              "country": "Afghanistan",
+              "total_medals": 2
+            },
+            {
+              "country": "Albania",
+              "total_medals": 3
+            },
+            {
+              "country": "Algeria",
+              "total_medals": 17
+            }
+          ],
+          "generated_row_count": 150,
+          "generated_rows_preview": [
+            {
+              "region_name": "Afghanistan",
+              "noc": "AFG",
+              "medal_count": 2
+            },
+            {
+              "region_name": "Netherlands Antilles",
+              "noc": "AHO",
+              "medal_count": 1
+            },
+            {
+              "region_name": "Albania",
+              "noc": "ALB",
+              "medal_count": 3
+            }
+          ],
+          "row_count_match": true,
+          "value_comparison": {
+            "match": true
+          }
+        },
+        {
+          "db": "world_development_indicators",
+          "gold_sql": "SELECT ShortName, IncomeGroup FROM Country WHERE IncomeGroup IS NOT NULL AND IncomeGroup != ''",
+          "generated_sql": "SELECT ShortName, TableName, LongName, CountryCode, IncomeGroup FROM Country WHERE IncomeGroup IS NOT NULL AND IncomeGroup <> '' AND (IncomeGroup LIKE 'High income%' OR IncomeGroup = 'Low income' OR IncomeGroup = 'Lower middle income')",
+          "gold_sql_normalized": "SELECT ShortName, IncomeGroup FROM Country WHERE IncomeGroup IS NOT NULL AND IncomeGroup != ''",
+          "generated_sql_normalized": "SELECT ShortName, TableName, LongName, CountryCode, IncomeGroup FROM Country WHERE IncomeGroup IS NOT NULL AND IncomeGroup <> '' AND (IncomeGroup LIKE 'High income%' OR IncomeGroup = 'Low income' OR IncomeGroup = 'Lower middle income')",
+          "sql_text_match": false,
+          "gold_row_count": 214,
+          "gold_rows_preview": [
+            {
+              "ShortName": "Afghanistan",
+              "IncomeGroup": "Low income"
+            },
+            {
+              "ShortName": "Albania",
+              "IncomeGroup": "Upper middle income"
+            },
+            {
+              "ShortName": "Algeria",
+              "IncomeGroup": "Upper middle income"
+            }
+          ],
+          "generated_row_count": 161,
+          "generated_rows_preview": [
+            {
+              "ShortName": "Afghanistan",
+              "TableName": "Afghanistan",
+              "LongName": "Islamic State of Afghanistan",
+              "CountryCode": "AFG",
+              "IncomeGroup": "Low income"
+            },
+            {
+              "ShortName": "Andorra",
+              "TableName": "Andorra",
+              "LongName": "Principality of Andorra",
+              "CountryCode": "ADO",
+              "IncomeGroup": "High income: nonOECD"
+            },
+            {
+              "ShortName": "Antigua and Barbuda",
+              "TableName": "Antigua and Barbuda",
+              "LongName": "Antigua and Barbuda",
+              "CountryCode": "ATG",
+              "IncomeGroup": "High income: nonOECD"
+            }
+          ],
+          "row_count_match": false,
+          "value_comparison": {
+            "match": true
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 10918,
+        "output_tokens": 987,
+        "llm_time_s": 16.276445150375366,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1444,
+            "output": 152,
+            "elapsed_s": 3.896026134490967
+          },
+          {
+            "model": "claude-opus-4-7",
+            "input": 9474,
+            "output": 835,
+            "elapsed_s": 12.3804190158844
+          }
+        ],
+        "estimated_cost_usd": 0.074857
+      },
+      "elapsed_s": 52.59542894363403,
+      "error": null
+    }
+  ]
+}
