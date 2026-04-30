@@ -1,0 +1,10 @@
+{
+  "db_name": "mental_health_survey",
+  "domain": "Mental health survey responses",
+  "key_tables": [
+    "Answer",
+    "Question",
+    "Survey"
+  ],
+  "summary": "This database contains survey responses from mental health surveys conducted across multiple years (2014, 2016, 2017). The Answer table stores individual response data linked to users and questions through foreign keys to Survey and Question tables. Question table contains survey questions covering demographics (age, gender, location) and presumably mental health-related topics. Note that the Answer table uses a composite primary key of UserID and QuestionID, and AnswerText is stored as TEXT regardless of whether the response is numeric or categorical."
+}

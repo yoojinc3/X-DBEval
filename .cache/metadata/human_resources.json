@@ -1,0 +1,10 @@
+{
+  "db_name": "human_resources",
+  "domain": "Corporate human resources and workforce management",
+  "key_tables": [
+    "employee",
+    "position",
+    "location"
+  ],
+  "summary": "This database tracks employee records, job positions, and office locations for workforce analytics. The employee table is the central fact table containing individual worker details (SSN, name, hire date, salary, gender, performance rating) with foreign keys to position and location dimensions. Salaries and position salary ranges are stored as text strings formatted as \"US$X,XXX.XX\" rather than numeric values. Notable design: employee SSN is the primary key, position and location are referenced dimensions with straightforward joins via positionID and locationID."
+}

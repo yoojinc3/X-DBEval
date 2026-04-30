@@ -1,0 +1,14 @@
+{
+  "db_name": "student_loan",
+  "domain": "Student loan and borrower socioeconomic characteristics",
+  "key_tables": [
+    "person",
+    "enrolled",
+    "no_payment_due",
+    "filed_for_bankrupcy",
+    "male",
+    "disabled",
+    "unemployed"
+  ],
+  "summary": "This database tracks student loan borrowers and their characteristics, including school enrollment details, payment status, and socioeconomic attributes. The core entity is person (borrowers), with enrollment tracked in the enrolled table (school and enrollment month), and payment obligation status captured in no_payment_due (with boolean values stored as \"pos\"/\"neg\" strings in the bool table). Demographic and life status attributes include gender (male table), disability status (disabled), employment status (unemployed), military service (enlist with organization), and bankruptcy filings (filed_for_bankrupcy). Academic engagement is measured via longest_absense_from_school (months). All dimension tables use name as PRIMARY KEY with foreign key references to person.name for easy joins."
+}

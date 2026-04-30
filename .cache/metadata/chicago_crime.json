@@ -1,0 +1,13 @@
+{
+  "db_name": "chicago_crime",
+  "domain": "Chicago crime incidents and law enforcement administration",
+  "key_tables": [
+    "Crime",
+    "IUCR",
+    "FBI_Code",
+    "District",
+    "Community_Area",
+    "Ward"
+  ],
+  "summary": "This database contains detailed Chicago crime incident reports with geographic, administrative, and classification dimensions. The central Crime table records individual incidents with timestamps, locations (blocks, coordinates, community areas), and classification codes (IUCR and FBI codes). Key dimensions include Community_Area (with population data), District (police districts with commander info), Ward (aldermanic wards with population), and lookup tables IUCR and FBI_Code that classify crime types. Notable quirks: population values in Community_Area are stored as comma-formatted TEXT rather than integers; geographic data is multi-dimensional (community_area_no, district_no, ward_no, beat, block, latitude/longitude); the arrest and domestic flags are TEXT strings (\"FALSE\"/\"TRUE\") not booleans."
+}

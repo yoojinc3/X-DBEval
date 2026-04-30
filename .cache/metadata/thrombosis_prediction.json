@@ -1,0 +1,10 @@
+{
+  "db_name": "thrombosis_prediction",
+  "domain": "Clinical thrombosis and autoimmune disease diagnostics",
+  "key_tables": [
+    "Patient",
+    "Examination",
+    "Laboratory"
+  ],
+  "summary": "This database tracks patients with autoimmune and thrombotic conditions, capturing demographic data, clinical examinations with serological markers (aCL antibodies, ANA patterns), and comprehensive laboratory results including coagulation, immunology, and complement panels. Key measures include thrombosis occurrence (binary), antibody titers (aCL IgG/IgM/IgA, anti-nuclear and complement-related markers), and routine laboratory values (liver, renal, hematologic). Examination and Laboratory tables share patient ID and date as composite keys, enabling temporal analysis of disease progression; note that many serological and coagulation tests are sparse (null-heavy) and test results use mixed encodings (integers, reals, text indicators like \"-\" for negative, and categorical patterns like \"P,S\" for ANA patterns)."
+}

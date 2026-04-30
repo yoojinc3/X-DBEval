@@ -1,0 +1,10 @@
+{
+  "db_name": "california_schools",
+  "domain": "California K-12 public schools nutrition and standardized testing",
+  "key_tables": [
+    "frpm",
+    "satscores",
+    "schools"
+  ],
+  "summary": "This database contains California public school administrative data, including Free and Reduced-Price Meal (FRPM) program eligibility and SAT performance metrics. The frpm table tracks enrollment and meal subsidy counts by academic year and grade range (K-12 and ages 5-17), while satscores contains average SAT reading, math, and writing scores by school. The schools table serves as a master reference with locations, charter status, operating dates, and administrator contact info. Join frpm and satscores via CDSCode/cds to the schools table; note that CDSCode may include leading zeros and is TEXT type, and schools may have multiple satscores records (district vs. school level)."
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "world_development_indicators",
+  "domain": "Global development metrics and economic indicators by country",
+  "key_tables": [
+    "Country",
+    "Indicators",
+    "Series",
+    "CountryNotes",
+    "Footnotes"
+  ],
+  "summary": "This database contains World Bank development indicators spanning economic, social, and environmental metrics across countries and years. The Indicators table is the core fact table, storing numeric values for specific indicators (identified by IndicatorCode), countries (CountryCode), and years (Year). Countries are dimensioned through the Country table with metadata including region, income group, currency, and accounting standards. The Series table provides detailed definitions and methodology for each indicator. CountryNotes and Footnotes tables provide source attribution and year-specific data caveats. Key quirk: country and series codes use shorthand strings (e.g., \"AFG\", \"SP.ADO.TFRT\"), year data is stored as integers, and Indicators values are nullable integers representing measurements in various units defined in Series."
+}

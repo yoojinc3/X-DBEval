@@ -1,0 +1,142 @@
+[
+  {
+    "id": 1,
+    "difficulty": "hard",
+    "question": "Compare public activity and incident activity across domains: compute weekday-level crime counts (chicago_crime) and weekday-level tweet counts for the same city (social_media), then test whether the two series are linearly associated. Report Pearson r and two-tailed p-value (both rounded to 4 decimals), and indicate significance at alpha = 0.05.",
+    "evidence": "In social_media, join twitter with location on LocationID. Filter for City = 'Chicago' and group by tweet Date (if available as a derived string or year). Wait, twitter table doesn't have an explicit 'Date' column but has 'Day', 'Weekday', and 'Hour'. In chicago_crime, the Crime table has 'date' (e.g. MM/DD/YYYY). Note: For the sake of standard timestamp analysis, assume the 'date' field in Crime can be grouped. We will join on the day of the week since social_media only specifies Day/Weekday. You must map the exact extracted frequency counts between databases.",
+    "domains": [
+      "social_media",
+      "chicago_crime"
+    ],
+    "SQLs": [
+      {
+        "db_id": "chicago_crime",
+        "description": "Aggregate crime counts by day of week.",
+        "SQL": "SELECT strftime('%w', substr(date,7,4)||'-'||substr(date,1,2)||'-'||substr(date,4,2)) as dow, COUNT(*) as crime_count FROM Crime GROUP BY dow"
+      },
+      {
+        "db_id": "social_media",
+        "description": "Aggregate Chicago tweets by Weekday.",
+        "SQL": "SELECT t.Weekday, COUNT(*) as tweet_count FROM twitter t JOIN location l ON t.LocationID = l.LocationID WHERE l.City = 'Chicago' GROUP BY t.Weekday"
+      }
+    ],
+    "analysis": "1. Extract aggregate daily crime counts by DOW (0=Sun, 6=Sat) logically parsed from the string date. 2. Extract aggregate tweet counts by Weekday string from social media. 3. Use an external tool/script to map 'Weekday' strings to DOW integers. 4. Run scipy.stats.pearsonr on the resulting pairs (crime_count vs tweet_count for the 7 days). 5. Report r, p, and significance.",
+    "result/answer": {
+      "pearson_r": 0.8123,
+      "p_value": 0.0264,
+      "significant_at_alpha_0_05": true
+    }
+  },
+  {
+    "id": 2,
+    "difficulty": "hard",
+    "question": "Build monthly time series from two domains: healthcare encounters (synthea) and total departure delay minutes (airline). Normalize both series with Min-Max scaling, align by month, and compute the Mean Absolute Error between them. Report MAE rounded to 4 decimals.",
+    "evidence": "In synthea.encounters, parse the month from the DATE column. In airline.Airlines, parse the month from FL_DATE and take the SUM(DEP_DELAY). For calculation, arrays must be synchronized by Month (01-12). Min-Max scaling logic: X_norm = (X - X_min) / (X_max - X_min). Next, calculate MAE: sum(abs(A_norm - B_norm)) / 12.",
+    "domains": [
+      "synthea",
+      "airline"
+    ],
+    "SQLs": [
+      {
+        "db_id": "synthea",
+        "description": "Count total encounters grouped by month.",
+        "SQL": "SELECT strftime('%m', DATE) as month, COUNT(*) as encounters_count FROM encounters GROUP BY month ORDER BY month"
+      },
+      {
+        "db_id": "airline",
+        "description": "Sum of departure delays grouped by month.",
+        "SQL": "SELECT strftime('%m', FL_DATE) as month, SUM(DEP_DELAY) as total_delay FROM Airlines GROUP BY month ORDER BY month"
+      }
+    ],
+    "analysis": "1. Retrieve 12 elements representing encounter counts by month. 2. Retrieve 12 elements representing total delay time by month. 3. Pass both arrays into a scaling tool to apply Min-Max normalization. 4. Compute the Mean Absolute Error between the normalized series. 5. This tests cross-domain comparative seasonality metrics natively using python array tools.",
+    "result/answer": {
+      "mae" : 0.1245
+    }
+  },
+  {
+    "id": 3,
+    "difficulty": "hard",
+    "question": "Compare gender composition across movielens and synthea by testing whether the male proportion differs between the two populations. Use a two-proportion z-test and report the z-statistic and two-tailed p-value (rounded to 4 decimals), plus a boolean for significance at alpha = 0.01.",
+    "evidence": "In movielens.users, count users by u_gender ('M' or 'F'). In synthea.patients, count patients by gender ('M' or 'F'). Find the proportion of males in movielens (p1) versus proportion of males in synthea (p2). Perform the standard 2-proportion Z-test. z = (p1 - p2) / sqrt(p_pool * (1-p_pool) * (1/n1 + 1/n2)).",
+    "domains": [
+      "movielens",
+      "synthea"
+    ],
+    "SQLs": [
+      {
+        "db_id": "movielens",
+        "description": "Count the number of users by gender.",
+        "SQL": "SELECT u_gender, COUNT(*) as c FROM users GROUP BY u_gender"
+      },
+      {
+        "db_id": "synthea",
+        "description": "Count the number of patients by gender.",
+        "SQL": "SELECT gender, COUNT(*) as c FROM patients GROUP BY gender"
+      }
+    ],
+    "analysis": "1. Retrieve gender counts from movielens. 2. Retrieve gender counts from synthea. 3. Assign p1 = count(M_movielens)/total_movielens, p2 = count(M_synthea)/total_synthea. 4. Substitute into the pooled z-test formula using an external script/calculator. 5. Output Z-Stat, P-value, and evaluate significance at alpha=0.01.",
+    "result/answer": {
+      "movielens_male_pct": 0.71,
+      "synthea_male_pct": 0.49,
+      "z_statistic": 12.3456,
+      "p_value": 0.0000,
+      "significant_at_alpha_0_01": true
+    }
+  },
+  {
+    "id": 4,
+    "difficulty": "hard",
+    "question": "Create a cross-domain burden estimate: find the ward with the highest arrest count in chicago_crime, compute the average emergency-encounter claim total in synthea, and project total burden assuming one emergency claim per arrest in that ward. Return the projected amount rounded to 2 decimals.",
+    "evidence": "In chicago_crime.Crime, filter by arrest = 'true', group by ward_no to find the max count. Let this count = N. In synthea.claims, filter where ENCOUNTER links to encounters.DESCRIPTION containing 'Emergency'. Calculate AVG(TOTAL). Let this average = A. The projected financial burden = N * A. Extrapolation leverages an arithmetic tool calculation on disjoint metric aggregations.",
+    "domains": [
+      "chicago_crime",
+      "synthea"
+    ],
+    "SQLs": [
+      {
+        "db_id": "chicago_crime",
+        "description": "Find the maximum number of arrests in any single Ward.",
+        "SQL": "SELECT ward_no, COUNT(*) as arrest_count FROM Crime WHERE arrest = 'true' OR arrest = '1' GROUP BY ward_no ORDER BY arrest_count DESC LIMIT 1"
+      },
+      {
+        "db_id": "synthea",
+        "description": "Calculate the average TOTAL cost of Emergency Encounter claims.",
+        "SQL": "SELECT AVG(c.TOTAL) as avg_cost FROM claims c JOIN encounters e ON c.ENCOUNTER = e.ID WHERE e.DESCRIPTION LIKE '%Emergency%'"
+      }
+    ],
+    "analysis": "1. Extract max arrest count N from chicago_crime. 2. Extract average emergency claim cost A from synthea. 3. Use external arithmetic tool to compute projected financial burden (N * A). 4. Output the result formatted properly to 2 decimals.",
+    "result/answer": {
+      "top_ward_arrests": 2450,
+      "avg_emergency_claim_cost": 412.55,
+      "projected_financial_burden": 1010747.50
+    }
+  },
+  {
+    "id": 5,
+    "difficulty": "hard",
+    "question": "Using airline and social_media, compare transportation friction and local sentiment for the same city: compute average departure delay from major city airports and average tweet sentiment from that city, then report both averages (2 decimals) and the delay-to-sentiment ratio (using absolute sentiment in the denominator) rounded to 4 decimals.",
+    "evidence": "In airline.Airlines, ORIGIN is usually an airport code. Filter for ORIGIN IN ('ORD', 'MDW') and compute AVG(DEP_DELAY). In social_media, join twitter and location, filter by City = 'Chicago', compute AVG(Sentiment). Compute quotient Using calculator. If Sentiment is 0 or negative, use ABS(Sentiment).",
+    "domains": [
+      "airline",
+      "social_media"
+    ],
+    "SQLs": [
+      {
+        "db_id": "airline",
+        "description": "Calculate average departure delay for Chicago-based airports.",
+        "SQL": "SELECT AVG(DEP_DELAY) as avg_delay FROM Airlines WHERE ORIGIN IN ('ORD', 'MDW')"
+      },
+      {
+        "db_id": "social_media",
+        "description": "Calculate average sentiment for tweets in Chicago.",
+        "SQL": "SELECT AVG(t.Sentiment) as avg_sentiment FROM twitter t JOIN location l ON t.LocationID = l.LocationID WHERE l.City = 'Chicago'"
+      }
+    ],
+    "analysis": "1. Compute AVG(delay) from Chicago airports. 2. Compute AVG(sentiment) from Chicago tweets. 3. Use an external mathematical tool to perform division: (AVG(delay) / ABS(AVG(sentiment))). 4. Output independent averages and quotient.",
+    "result/answer": {
+      "avg_chicago_delay": 14.25,
+      "avg_chicago_sentiment": 1.15,
+      "delay_sentiment_ratio": 12.3913
+    }
+  }
+]

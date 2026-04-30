@@ -1,0 +1,73 @@
+{
+  "benchmark_json": "C:\\Users\\sidan_ud0ve2j\\OneDrive - University of Illinois - Urbana\\College\\Senior\\CS498 DK\\project\\cs498\\dev\\task.json",
+  "db_dir": "C:\\Users\\sidan_ud0ve2j\\OneDrive - University of Illinois - Urbana\\College\\Senior\\CS498 DK\\project\\data\\dev_20240627",
+  "agent_dir": "C:\\Users\\sidan_ud0ve2j\\OneDrive - University of Illinois - Urbana\\College\\Senior\\CS498 DK\\project\\cs498-dku-agent",
+  "run_at": "2026-04-28T19:27:38",
+  "task_count": 2,
+  "correct_tasks": 0,
+  "accuracy": 0.0,
+  "sql_success_tasks": 0,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "estimated_cost_usd": 0.0,
+  "elapsed_s": 0.0,
+  "tasks": [
+    {
+      "task_id": 1,
+      "difficulty": "simple",
+      "question": "Across all Chicago wards, compute the Pearson correlation coefficient between the ward-level food inspection failure rate and the ward-level crime arrest rate.",
+      "db_id": [
+        "chicago_crime",
+        "food_inspection_2"
+      ],
+      "selected_dbs": [],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": false,
+      "sql_attempts": 0,
+      "agent_answer": null,
+      "gold_answer": 0.518,
+      "sql_plan": [],
+      "sql_comparison": [],
+      "token_usage": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "by_call": [],
+        "estimated_cost_usd": 0.0
+      },
+      "elapsed_s": 0.0,
+      "error": "Could not locate SQLite database for 'chicago_crime' under C:\\Users\\sidan_ud0ve2j\\OneDrive - University of Illinois - Urbana\\College\\Senior\\CS498 DK\\project\\data\\dev_20240627"
+    },
+    {
+      "task_id": 2,
+      "difficulty": "challenging",
+      "question": "To examine how harsh weather relates to domestic violence in Chicago, compute the Welch's t-statistic and p-value comparing monthly domestic violence crime rates between harsh and non-harsh months. Return the result as {\"t\": <float>, \"p\": <float>}",
+      "db_id": [
+        "chicago_crime",
+        "sales_in_weather"
+      ],
+      "selected_dbs": [],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": false,
+      "sql_attempts": 0,
+      "agent_answer": null,
+      "gold_answer": {
+        "t": 2.27,
+        "p": 0.113
+      },
+      "sql_plan": [],
+      "sql_comparison": [],
+      "token_usage": {
+        "calls": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "by_call": [],
+        "estimated_cost_usd": 0.0
+      },
+      "elapsed_s": 0.0,
+      "error": "Could not locate SQLite database for 'chicago_crime' under C:\\Users\\sidan_ud0ve2j\\OneDrive - University of Illinois - Urbana\\College\\Senior\\CS498 DK\\project\\data\\dev_20240627"
+    }
+  ]
+}

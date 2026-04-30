@@ -1,0 +1,5 @@
+data/
+databases/
+
+.env
+.DS_Store

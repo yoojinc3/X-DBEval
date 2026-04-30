@@ -1,0 +1,279 @@
+{
+  "benchmark_json": "cs498\\dev\\task.json",
+  "db_dir": "C:\\Users\\sidan_ud0ve2j\\OneDrive - University of Illinois - Urbana\\College\\Senior\\CS498 DK\\project\\data\\train\\train_databases",
+  "data_dir": "C:\\Users\\sidan_ud0ve2j\\OneDrive - University of Illinois - Urbana\\College\\Senior\\CS498 DK\\project\\data\\train\\train_databases",
+  "agent_dir": "C:\\Users\\sidan_ud0ve2j\\OneDrive - University of Illinois - Urbana\\College\\Senior\\CS498 DK\\project\\cs498-dku-agent",
+  "run_at": "2026-04-29T19:03:07",
+  "task_count": 1,
+  "correct_tasks": 0,
+  "accuracy": 0.0,
+  "sql_success_tasks": 1,
+  "skipped_tasks": [],
+  "input_tokens": 5802,
+  "output_tokens": 558,
+  "estimated_cost_usd": 0.025776,
+  "elapsed_s": 30.39328122138977,
+  "tasks": [
+    {
+      "task_id": 2,
+      "difficulty": "challenging",
+      "question": "To examine how harsh weather relates to domestic violence in Chicago, compute the Welch's t-statistic and p-value comparing monthly domestic violence crime rates between harsh and non-harsh months. Return the result as {\"t\": <float>, \"p\": <float>}",
+      "db_id": [
+        "chicago_crime",
+        "sales_in_weather"
+      ],
+      "selected_dbs": [
+        "chicago_crime",
+        "sales_in_weather"
+      ],
+      "final_score": 0.0,
+      "correct": false,
+      "sql_success": true,
+      "sql_attempts": 1,
+      "agent_answer": {
+        "t": 0.0,
+        "p": 1.0
+      },
+      "gold_answer": {
+        "t": 2.27,
+        "p": 0.113
+      },
+      "sql_plan": [
+        {
+          "db": "chicago_crime",
+          "sql": "SELECT strftime('%Y-%m', date) AS year_month, COUNT(*) AS domestic_violence_count FROM Crime WHERE domestic = 'TRUE' AND date IS NOT NULL GROUP BY year_month ORDER BY year_month",
+          "purpose": "Returns monthly counts of domestic violence crimes in Chicago."
+        },
+        {
+          "db": "sales_in_weather",
+          "sql": "SELECT strftime('%Y-%m', date) AS year_month, AVG(preciptotal) AS avg_precipitation FROM weather WHERE preciptotal IS NOT NULL GROUP BY year_month ORDER BY year_month",
+          "purpose": "Returns the average daily precipitation per month across all weather stations."
+        }
+      ],
+      "sql_comparison": [
+        {
+          "db": "sales_in_weather",
+          "gold_sql": "SELECT yr_month, AVG(station_avg) AS avg_precip FROM (SELECT station_nbr, SUBSTR(date, 1, 7) AS yr_month, AVG(preciptotal) AS station_avg FROM weather WHERE preciptotal IS NOT NULL GROUP BY station_nbr, SUBSTR(date, 1, 7)) GROUP BY yr_month",
+          "generated_sql": "SELECT strftime('%Y-%m', date) AS year_month, AVG(preciptotal) AS avg_precipitation FROM weather WHERE preciptotal IS NOT NULL GROUP BY year_month ORDER BY year_month",
+          "gold_sql_normalized": "SELECT yr_month, AVG(station_avg) AS avg_precip FROM (SELECT station_nbr, SUBSTR(date, 1, 7) AS yr_month, AVG(preciptotal) AS station_avg FROM weather WHERE preciptotal IS NOT NULL GROUP BY station_nbr, SUBSTR(date, 1, 7)) GROUP BY yr_month",
+          "generated_sql_normalized": "SELECT strftime('%Y-%m', date) AS year_month, AVG(preciptotal) AS avg_precipitation FROM weather WHERE preciptotal IS NOT NULL GROUP BY year_month ORDER BY year_month",
+          "sql_text_match": false,
+          "gold_row_count": 34,
+          "gold_rows_preview": [
+            {
+              "yr_month": "2012-01",
+              "avg_precip": 0.08555178268251273
+            },
+            {
+              "yr_month": "2012-02",
+              "avg_precip": 0.06602540834845735
+            },
+            {
+              "yr_month": "2012-03",
+              "avg_precip": 0.12499151103565366
+            }
+          ],
+          "generated_row_count": 34,
+          "generated_rows_preview": [
+            {
+              "year_month": "2012-01",
+              "avg_precipitation": 0.08555178268251273
+            },
+            {
+              "year_month": "2012-02",
+              "avg_precipitation": 0.06602540834845735
+            },
+            {
+              "year_month": "2012-03",
+              "avg_precipitation": 0.12499151103565366
+            }
+          ],
+          "row_count_match": true,
+          "gold_numeric_values": [
+            0.021438596491228073,
+            0.06239615166949632,
+            0.06431239388794567,
+            0.06602540834845735,
+            0.06651952461799661,
+            0.06736015037593984,
+            0.07124108658743633,
+            0.07130390492359932,
+            0.07680022637238257,
+            0.08012764670296431,
+            0.08325863044708545,
+            0.08392982456140351,
+            0.08478607809847198,
+            0.08555178268251273,
+            0.09105263157894737,
+            0.09454748941318813,
+            0.09535714285714286,
+            0.10421052631578948,
+            0.10860045274476515,
+            0.11061120543293718,
+            0.11864609800362975,
+            0.12421415607985481,
+            0.12475,
+            0.12499151103565366,
+            0.12740350877192982,
+            0.1394736842105263,
+            0.14259762308998303,
+            0.142937181663837,
+            0.14473684210526316,
+            0.14604414261460102,
+            0.1531918505942275,
+            0.15922807017543858,
+            0.18233163554046405,
+            0.203
+          ],
+          "generated_numeric_values": [
+            0.021438596491228073,
+            0.0625,
+            0.06431239388794567,
+            0.06602540834845735,
+            0.06651952461799661,
+            0.06748582230623819,
+            0.07125850340136054,
+            0.07152777777777779,
+            0.07694974003466204,
+            0.08008787346221441,
+            0.08326530612244898,
+            0.08392982456140352,
+            0.08472789115646258,
+            0.08555178268251273,
+            0.09105263157894737,
+            0.09453427065026362,
+            0.09535714285714286,
+            0.10421052631578948,
+            0.10845238095238095,
+            0.11061120543293719,
+            0.11875219683655534,
+            0.12425307557117751,
+            0.12474999999999999,
+            0.12499151103565366,
+            0.12740350877192982,
+            0.1394736842105263,
+            0.142597623089983,
+            0.142937181663837,
+            0.14473684210526316,
+            0.14604414261460102,
+            0.15319185059422752,
+            0.1592280701754386,
+            0.18212585034013606,
+            0.203
+          ],
+          "value_comparison": {
+            "match": false,
+            "reason": "7 value(s) differ",
+            "mismatches": [
+              {
+                "index": 1,
+                "gold": 0.06239615166949632,
+                "model": 0.0625,
+                "diff": 0.00010384833050367664
+              },
+              {
+                "index": 5,
+                "gold": 0.06736015037593984,
+                "model": 0.06748582230623819,
+                "diff": 0.0001256719302983461
+              },
+              {
+                "index": 7,
+                "gold": 0.07130390492359932,
+                "model": 0.07152777777777779,
+                "diff": 0.00022387285417846403
+              },
+              {
+                "index": 8,
+                "gold": 0.07680022637238257,
+                "model": 0.07694974003466204,
+                "diff": 0.00014951366227947127
+              },
+              {
+                "index": 18,
+                "gold": 0.10860045274476515,
+                "model": 0.10845238095238095,
+                "diff": 0.00014807179238419954
+              }
+            ]
+          }
+        },
+        {
+          "db": "chicago_crime",
+          "gold_sql": "SELECT PRINTF('%04d-%02d', CAST(SUBSTR(date, INSTR(date,'/')+INSTR(SUBSTR(date,INSTR(date,'/')+1),'/') +1, 4) AS INT), CAST(SUBSTR(date, 1, INSTR(date,'/')-1) AS INT)) AS yr_month, CAST(SUM(CASE WHEN domestic = 'TRUE' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS dv_rate FROM Crime GROUP BY yr_month",
+          "generated_sql": "SELECT strftime('%Y-%m', date) AS year_month, COUNT(*) AS domestic_violence_count FROM Crime WHERE domestic = 'TRUE' AND date IS NOT NULL GROUP BY year_month ORDER BY year_month",
+          "gold_sql_normalized": "SELECT PRINTF('%04d-%02d', CAST(SUBSTR(date, INSTR(date,'/')+INSTR(SUBSTR(date,INSTR(date,'/')+1),'/') +1, 4) AS INT), CAST(SUBSTR(date, 1, INSTR(date,'/')-1) AS INT)) AS yr_month, CAST(SUM(CASE WHEN domestic = 'TRUE' THEN 1 ELSE 0 END) AS REAL) / COUNT(*) AS dv_rate FROM Crime GROUP BY yr_month",
+          "generated_sql_normalized": "SELECT strftime('%Y-%m', date) AS year_month, COUNT(*) AS domestic_violence_count FROM Crime WHERE domestic = 'TRUE' AND date IS NOT NULL GROUP BY year_month ORDER BY year_month",
+          "sql_text_match": false,
+          "gold_row_count": 12,
+          "gold_rows_preview": [
+            {
+              "yr_month": "2018-01",
+              "dv_rate": 0.16007634334931975
+            },
+            {
+              "yr_month": "2018-02",
+              "dv_rate": 0.16666666666666666
+            },
+            {
+              "yr_month": "2018-03",
+              "dv_rate": 0.16723259762308998
+            }
+          ],
+          "generated_row_count": 1,
+          "generated_rows_preview": [
+            {
+              "year_month": null,
+              "domestic_violence_count": 43880
+            }
+          ],
+          "row_count_match": false,
+          "gold_numeric_values": [
+            0.15722898687788153,
+            0.15813913118951525,
+            0.1590420632483881,
+            0.16007634334931975,
+            0.1604100227790433,
+            0.1630318891150528,
+            0.16361474435196194,
+            0.16586151368760063,
+            0.16666666666666666,
+            0.16723259762308998,
+            0.1703305785123967,
+            0.1732739420935412
+          ],
+          "generated_numeric_values": [
+            43880.0
+          ],
+          "value_comparison": {
+            "match": false,
+            "reason": "value count differs: gold=12, model=1"
+          }
+        }
+      ],
+      "token_usage": {
+        "calls": 2,
+        "input_tokens": 5802,
+        "output_tokens": 558,
+        "llm_time_s": 15.53804326057434,
+        "by_call": [
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 1329,
+            "output": 133,
+            "elapsed_s": 7.3568785190582275
+          },
+          {
+            "model": "claude-sonnet-4-5",
+            "input": 4473,
+            "output": 425,
+            "elapsed_s": 8.181164741516113
+          }
+        ],
+        "estimated_cost_usd": 0.025776
+      },
+      "elapsed_s": 30.39328122138977,
+      "error": null
+    }
+  ]
+}

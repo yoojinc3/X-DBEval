@@ -1,0 +1,10 @@
+{
+  "db_name": "sales_in_weather",
+  "domain": "Retail sales and weather correlation analysis",
+  "key_tables": [
+    "sales_in_weather",
+    "weather",
+    "relation"
+  ],
+  "summary": "This database links daily retail sales transactions to weather observations through a store-to-weather-station mapping. The sales_in_weather table records units sold by date, store, and item; the weather table contains comprehensive meteorological measurements (temperature, precipitation, wind, pressure) indexed by station and date. The relation table bridges stores to weather stations (many-to-one mapping). Analysts can correlate sales volumes with weather conditions by joining through the relation table, noting that each store may be linked to a different weather station."
+}

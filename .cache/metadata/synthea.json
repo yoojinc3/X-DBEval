@@ -1,0 +1,15 @@
+{
+  "db_name": "synthea",
+  "domain": "Synthetic patient health records and medical encounters",
+  "key_tables": [
+    "patients",
+    "encounters",
+    "conditions",
+    "medications",
+    "observations",
+    "procedures",
+    "allergies",
+    "immunizations"
+  ],
+  "summary": "Synthea is a comprehensive synthetic patient health database containing demographic, clinical encounter, and treatment data for a population of patients. Core entities include patients (with demographics like race, ethnicity, gender, and location), encounters (timestamped medical visits with reason codes), and linked clinical events (conditions, medications, procedures, immunizations, allergies, and observations). Dates are stored as DATE type, clinical codes as INTEGERs (SNOMED-CT style), and most entities reference patients and encounters via UUID foreign keys. The all_prevalences table provides epidemiological context for disorder prevalence across the synthetic population."
+}

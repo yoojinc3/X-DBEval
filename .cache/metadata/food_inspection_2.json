@@ -1,0 +1,12 @@
+{
+  "db_name": "food_inspection_2",
+  "domain": "Food service establishment inspection records",
+  "key_tables": [
+    "inspection",
+    "establishment",
+    "violation",
+    "inspection_point",
+    "employee"
+  ],
+  "summary": "This database tracks food facility inspections and compliance violations in Chicago. The core fact table is inspection, recording inspections of establishments (restaurants, special events, etc.) by employees on specific dates with pass/fail results. Violations are linked through a composite key (inspection_id, point_id) to specific inspection deficiency codes, each with associated fines and severity levels (Critical, Major, Minor). Key dimensions include establishment characteristics (facility type, risk level, geographic location via zip/ward), employees (role, salary, supervisor hierarchy), and standardized inspection points with regulatory codes and fine amounts."
+}

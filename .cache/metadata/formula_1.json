@@ -1,0 +1,15 @@
+{
+  "db_name": "formula_1",
+  "domain": "Formula 1 racing statistics",
+  "key_tables": [
+    "races",
+    "results",
+    "drivers",
+    "constructors",
+    "circuits",
+    "qualifying",
+    "driverStandings",
+    "constructorStandings"
+  ],
+  "summary": "This database contains historical Formula 1 race data spanning multiple seasons (1950+), with core entities being races, drivers, constructors (teams), and circuits (venues). The primary fact tables are results (race finishing positions and points), qualifying (session times), and standings tables (cumulative season-to-date metrics). Notable quirks include lap times stored as text format (e.g., \"1:49.088\") with parallel milliseconds columns, pit stop durations similarly dual-encoded, nationality stored as adjectives (e.g., \"British\"), and standings tracked after each race with position and cumulative wins recorded."
+}

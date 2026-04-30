@@ -1,0 +1,12 @@
+{
+  "db_name": "college_completion",
+  "domain": "Higher education enrollment and completion statistics",
+  "key_tables": [
+    "institutions",
+    "completions",
+    "enrollments",
+    "demographics",
+    "programs"
+  ],
+  "summary": "This database tracks student enrollment, persistence, and degree completion metrics across higher education institutions. It contains institutional master data, student demographic information, enrollment records, and completion outcomes, enabling analysis of graduation rates, retention patterns, and completion trends by institution, program, and student demographic groups. Key data includes institution identifiers and classifications, student enrollment periods, degree/certificate completion events with award types, and demographic breakdowns by sex, race/ethnicity, and age. Analysts should note that completion records are likely keyed by institution, program, and demographic cohort rather than individual students, and measures may use standard IPEDS/NCES classification schemes for institutions and degree types."
+}

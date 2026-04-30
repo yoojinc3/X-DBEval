@@ -1,0 +1,13 @@
+{
+  "db_name": "student_club",
+  "domain": "Student club operations and event management",
+  "key_tables": [
+    "event",
+    "attendance",
+    "budget",
+    "expense",
+    "income",
+    "member"
+  ],
+  "summary": "This database tracks student club operations including events, member participation, and financial management. Core entities include events (with date, location, status, and type), members (with contact info, major, and position), and financial records (budget allocations by category, actual expenses, and income from dues). Key measures are budget amounts, spending tracking (spent/remaining), and event attendance. Notable encoding: member positions and event statuses are stored as text strings; ZIP codes are integers linked to location details; expense approval status is a text boolean (\"true\"/\"false\"); all IDs are text identifiers. The expense table links to both member (who submitted) and budget (which category), requiring joins through budget back to events."
+}

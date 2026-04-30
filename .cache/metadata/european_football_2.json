@@ -1,0 +1,14 @@
+{
+  "db_name": "european_football_2",
+  "domain": "European football league matches and player statistics",
+  "key_tables": [
+    "Match",
+    "Team",
+    "Player",
+    "Player_Attributes",
+    "Team_Attributes",
+    "League",
+    "Country"
+  ],
+  "summary": "This database captures match results, team details, and player performance data across multiple European football leagues (Belgium, England, France, etc.). The Match table is the central fact table, containing match outcomes, betting odds from multiple providers (B365, BW, IW, etc.), and event counts (goals, shots, fouls, cards, crosses, corners, possession), with references to home/away teams and 11 starting players per side via X/Y coordinate arrays. Player and Team tables provide dimension data, with Player_Attributes and Team_Attributes offering time-series snapshots of individual and tactical metrics. Note: player rosters in Match use position indices (home_player_1 through home_player_11) that must be joined against Player.player_api_id; team references use team_api_id in Match but team_fifa_api_id in Team_Attributes, requiring careful join key selection."
+}

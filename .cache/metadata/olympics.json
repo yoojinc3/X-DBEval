@@ -1,0 +1,15 @@
+{
+  "db_name": "olympics",
+  "domain": "Olympic Games athlete performance and medals",
+  "key_tables": [
+    "games",
+    "games_competitor",
+    "competitor_event",
+    "event",
+    "sport",
+    "person",
+    "noc_region",
+    "medal"
+  ],
+  "summary": "This database tracks Olympic Games results across multiple years and locations. Core entities include Games (with year, season, and host city), Persons (athletes with biometric data like height/weight), Sports, Events, and Medal outcomes. The fact table competitor_event links athletes to their event performance and medal results. Key encoding: athletes' countries are stored via person_region and noc_region tables using ISO 3-letter NOC codes and region names. Note that height/weight may be 0 for missing data, and age at games participation is stored in games_competitor. Analytics queries typically require multi-step joins from competitor_event through games_competitor and person to extract athlete and country information."
+}

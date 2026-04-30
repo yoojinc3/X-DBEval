@@ -1,0 +1,11 @@
+{
+  "db_name": "toxicology",
+  "domain": "Chemical toxicology and molecular structure analysis",
+  "key_tables": [
+    "molecule",
+    "atom",
+    "bond",
+    "connected"
+  ],
+  "summary": "This database stores chemical molecules and their structural composition for toxicology research. The core entities are molecules (identified by molecule_id with a toxicity label), atoms (with element symbols as text), and bonds (with bond type as text character like \"-\"). The connected table represents the molecular graph, linking atom pairs through bonds; note that each bond appears twice in connected (once in each direction) to represent bidirectional connectivity. Join paths require following molecule_id first to scope atoms and bonds, then using atom_id pairs through the connected table to traverse molecular structure."
+}
