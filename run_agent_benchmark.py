@@ -13,7 +13,9 @@ import logging
 import os
 import sqlite3
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -54,7 +56,14 @@ _PRICING: dict[str, tuple[float, float]] = {
     "claude-sonnet-4-5-20251001": (3.00, 15.00),
 }
 
-_task_usage: list[dict[str, Any]] = []
+_thread_local = threading.local()
+_print_lock = threading.Lock()
+
+
+def _get_task_usage() -> list[dict[str, Any]]:
+    if not hasattr(_thread_local, "task_usage"):
+        _thread_local.task_usage = []
+    return _thread_local.task_usage
 
 
 def _cost_usd(model: str, inp: int, out: int) -> float:
@@ -84,7 +93,7 @@ def _tracked_call_structured[T: Any](
         messages=[{"role": "user", "content": user}],
     )
     elapsed = time.time() - t_start
-    _task_usage.append({
+    _get_task_usage().append({
         "model": model,
         "input": response.usage.input_tokens,
         "output": response.usage.output_tokens,
@@ -318,7 +327,7 @@ class TaskReport:
 
 
 def run_task(task: dict[str, Any], db_dir: Path) -> TaskReport:
-    _task_usage.clear()
+    _thread_local.task_usage = []
     t0 = time.time()
 
     task_id = task.get("id", "?")
@@ -408,15 +417,16 @@ def run_task(task: dict[str, Any], db_dir: Path) -> TaskReport:
     final_score = score_answer(agent_answer, gold_answer, tolerance)
     correct = final_score >= 1.0
 
+    task_usage = _get_task_usage()
     usage_summary = {
-        "calls": len(_task_usage),
-        "input_tokens": sum(item["input"] for item in _task_usage),
-        "output_tokens": sum(item["output"] for item in _task_usage),
-        "llm_time_s": sum(item.get("elapsed_s", 0) for item in _task_usage),
-        "by_call": list(_task_usage),
+        "calls": len(task_usage),
+        "input_tokens": sum(item["input"] for item in task_usage),
+        "output_tokens": sum(item["output"] for item in task_usage),
+        "llm_time_s": sum(item.get("elapsed_s", 0) for item in task_usage),
+        "by_call": list(task_usage),
     }
     usage_summary["estimated_cost_usd"] = sum(
-        _cost_usd(item["model"], item["input"], item["output"]) for item in _task_usage
+        _cost_usd(item["model"], item["input"], item["output"]) for item in task_usage
     )
 
     sql_plan = [q.model_dump() for q in (plan.queries if plan else [])]
@@ -523,6 +533,10 @@ def main() -> None:
     parser.add_argument("--limit", type=int, help="Maximum number of tasks to run after filtering")
     parser.add_argument("-o", "--output", help="Optional output file name inside runs/")
     parser.add_argument("--verbose", "-v", action="store_true")
+    parser.add_argument(
+        "--workers", "-w", type=int, default=4,
+        help="Number of parallel worker threads (default: 4)",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -576,61 +590,78 @@ def main() -> None:
     output_name = args.output or f"benchmark_{benchmark_path.stem}_{timestamp}.json"
     output_path = RUNS_DIR / output_name
 
-    print(f"Running {len(tasks)} task(s) from {benchmark_path.name}...\n", flush=True)
+    num_workers = min(args.workers, len(tasks))
+    print(f"Running {len(tasks)} task(s) from {benchmark_path.name} with {num_workers} parallel worker(s)...\n", flush=True)
 
-    reports: list[TaskReport] = []
-    for index, task in enumerate(tasks, 1):
+    def _run_one(index_task: tuple[int, dict[str, Any]]) -> TaskReport:
+        index, task = index_task
         task_id = task.get("id", "?")
         difficulty = task.get("difficulty", "—")
         preview = task["question"][:80]
-        print(f"[{index}/{len(tasks)}] Task {task_id} ({difficulty}): {preview}...", flush=True)
-
+        with _print_lock:
+            print(f"[{index}/{len(tasks)}] Task {task_id} ({difficulty}): {preview}...", flush=True)
         try:
             report = run_task(task, db_dir)
-            reports.append(report)
-            print(
+            lines = [
                 f"         {'✓' if report.correct else '✗'} Final={_fmt(report.final_score)} "
-                f"SQL={'✓' if report.sql_success else '✗'} Tokens={report.token_usage['input_tokens'] + report.token_usage['output_tokens']} "
+                f"SQL={'✓' if report.sql_success else '✗'} "
+                f"Tokens={report.token_usage['input_tokens'] + report.token_usage['output_tokens']} "
                 f"{report.elapsed_s:.1f}s",
-                flush=True,
-            )
+            ]
             for comparison in report.sql_comparison:
                 db_name = comparison["db"]
                 if comparison.get("gold_error"):
-                    print(f"         {db_name}: gold SQL error: {comparison['gold_error']}", flush=True)
+                    lines.append(f"         {db_name}: gold SQL error: {comparison['gold_error']}")
                 elif comparison.get("generated_error"):
-                    print(f"         {db_name}: generated SQL missing: {comparison['generated_error']}", flush=True)
+                    lines.append(f"         {db_name}: generated SQL missing: {comparison['generated_error']}")
                 else:
                     text_ok = "✓" if comparison.get("sql_text_match") else "✗"
                     row_ok = "✓" if comparison.get("row_count_match") else "✗"
                     val_ok = "✓" if comparison.get("value_comparison", {}).get("match") else "✗"
-                    print(
-                        f"         {db_name}: text {text_ok} rows {row_ok} values {val_ok}",
-                        flush=True,
-                    )
+                    lines.append(f"         {db_name}: text {text_ok} rows {row_ok} values {val_ok}")
+            with _print_lock:
+                print("\n".join(lines), flush=True)
+            return report
         except Exception as exc:  # noqa: BLE001
-            print(f"         ERROR: {exc}", flush=True)
+            with _print_lock:
+                print(f"         ERROR (Task {task_id}): {exc}", flush=True)
             logger.exception("Task %s failed", task_id)
-            reports.append(
-                TaskReport(
-                    task_id=task_id,
-                    difficulty=difficulty,
-                    question=task["question"],
-                    db_id=list(task.get("db_id") or task.get("domains") or task.get("databases") or []),
-                    selected_dbs=[],
-                    final_score=0.0,
-                    correct=False,
-                    sql_success=False,
-                    sql_attempts=0,
-                    agent_answer=None,
-                    gold_answer=_task_answer(task),
-                    sql_plan=[],
-                    sql_comparison=[],
-                    token_usage={"calls": 0, "input_tokens": 0, "output_tokens": 0, "by_call": [], "estimated_cost_usd": 0.0},
-                    elapsed_s=0.0,
-                    error=str(exc),
-                )
+            return TaskReport(
+                task_id=task_id,
+                difficulty=task.get("difficulty", "—"),
+                question=task["question"],
+                db_id=list(task.get("db_id") or task.get("domains") or task.get("databases") or []),
+                selected_dbs=[],
+                final_score=0.0,
+                correct=False,
+                sql_success=False,
+                sql_attempts=0,
+                agent_answer=None,
+                gold_answer=_task_answer(task),
+                sql_plan=[],
+                sql_comparison=[],
+                token_usage={"calls": 0, "input_tokens": 0, "output_tokens": 0, "by_call": [], "estimated_cost_usd": 0.0},
+                elapsed_s=0.0,
+                error=str(exc),
             )
+
+    # Map future -> original index so we can restore task order in the report.
+    indexed_tasks = list(enumerate(tasks, 1))
+    future_to_index: dict[Any, int] = {}
+    reports_by_index: dict[int, TaskReport] = {}
+
+    wall_t0 = time.time()
+    with ThreadPoolExecutor(max_workers=num_workers) as executor:
+        for idx_task in indexed_tasks:
+            fut = executor.submit(_run_one, idx_task)
+            future_to_index[fut] = idx_task[0]
+        for fut in as_completed(future_to_index):
+            orig_index = future_to_index[fut]
+            reports_by_index[orig_index] = fut.result()
+    wall_elapsed = time.time() - wall_t0
+
+    # Restore submission order.
+    reports: list[TaskReport] = [reports_by_index[i] for i in sorted(reports_by_index)]
 
     print()
     print_table(reports)
@@ -649,7 +680,8 @@ def main() -> None:
         "input_tokens": sum(report.token_usage["input_tokens"] for report in reports),
         "output_tokens": sum(report.token_usage["output_tokens"] for report in reports),
         "estimated_cost_usd": sum(report.token_usage["estimated_cost_usd"] for report in reports),
-        "elapsed_s": sum(report.elapsed_s for report in reports),
+        "elapsed_s": wall_elapsed,
+        "total_task_time_s": sum(report.elapsed_s for report in reports),
         "tasks": [asdict(report) for report in reports],
     }
 

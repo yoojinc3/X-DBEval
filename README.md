@@ -12,6 +12,7 @@ Useful arguments:
 - `--limit`: run only the first N runnable tasks after filtering missing databases.
 - `-o / --output`: output filename inside `cs498/runs/`.
 - `--verbose / -v`: print agent logging.
+- `--workers`: run N tasks in parallel
 
 Default starting command:
 
