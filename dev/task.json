@@ -7,7 +7,7 @@
         ],
         "difficulty": "simple",
         "question": "Across all Chicago wards, compute the Pearson correlation coefficient between the ward-level food inspection failure rate and the ward-level crime arrest rate.",
-        "evidence": "Only include wards that have both food inspection and crime data.",
+        "evidence": "A food inspection failure is defined as results = 'Fail'. Only include wards that have both food inspection and crime data.",
         "intermediate_sqls": [
             {
                 "db": "food_inspection_2",
