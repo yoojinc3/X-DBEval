@@ -1,0 +1,43 @@
+{
+    "total": 20,
+    "correct": 0,
+    "accuracy": 0.0,
+    "db_selection": {
+        "correct": 18,
+        "total": 20,
+        "accuracy": 0.9
+    },
+    "execution_success": 5,
+    "execution_success_rate": 0.25,
+    "truncated_tasks": 0,
+    "truncated_rate": 0.0,
+    "intermediate_sqls": {
+        "tasks_with_gold": 20,
+        "all_matched": 0,
+        "match_rate": 0.0
+    },
+    "token_usage": {
+        "cache_creation_input_tokens": 0,
+        "output_tokens": 16048,
+        "cache_read_input_tokens": 0,
+        "input_tokens": 18637
+    },
+    "cost_usd": 0.2873,
+    "by_difficulty": {
+        "challenging": {
+            "total": 9,
+            "correct": 0,
+            "accuracy": 0.0
+        },
+        "moderate": {
+            "total": 7,
+            "correct": 0,
+            "accuracy": 0.0
+        },
+        "simple": {
+            "total": 4,
+            "correct": 0,
+            "accuracy": 0.0
+        }
+    }
+}
