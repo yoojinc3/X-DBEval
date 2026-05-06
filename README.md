@@ -87,38 +87,56 @@ If not, modify the database to enable it.
 
 Each task is defined as a **cross-domain analytical question** that requires querying two or more databases and combining the results. The task includes:
 
-- A natural language **question** with specific result format (or we can have separate field for this one)
-- The **intermediate SQL queries** needed to retrieve data from each database, but won't be used for the evaluation
-- The **result/answer** used for evaluation
+- A natural language **question** with specific result format
+- The **intermediate SQL queries** needed to retrieve data from each database (not used for evaluation, but used to validate model SQL)
+- The **result** used for evaluation
 
 **Task format:**
 ```json
 [
     {
         "id": 1,
+        "difficulty": "simple",
         "question": "Is there a correlation between the daily number of crimes in Chicago and the daily volume of negative-sentiment tweets posted from Chicago? Report the Pearson correlation coefficient.",
         "evidence": "Negative sentiment refers to Sentiment < 0; Chicago tweets are identified via location.City = 'Chicago'; crime date is parsed from Crime.date (YYYY-MM-DD format)",
-        "domains": [
+        "db_id": [
             "chicago_crime",
             "social_media"
         ],
-        "SQLs": [
+        "intermediate_sqls": [
             {
-                "db_id": "chicago_crime",
-                "description": "Count the number of crimes per day",
-                "SQL": "SELECT DATE(date) AS day, COUNT(*) AS crime_count FROM Crime GROUP BY DATE(date)"
+                "db": "chicago_crime",
+                "sql": "SELECT DATE(date) AS day, COUNT(*) AS crime_count FROM Crime GROUP BY DATE(date)"
             },
             {
-                "db_id": "social_media",
-                "description": "Count the number of negative-sentiment tweets from Chicago per day",
-                "SQL": "SELECT T2.Day, COUNT(*) AS neg_tweet_count FROM twitter AS T1 JOIN location AS T2 ON T1.LocationID = T2.LocationID WHERE T1.Sentiment < 0 AND T2.City = 'Chicago' GROUP BY T2.Day"
+                "db": "social_media",
+                "sql": "SELECT T2.Day, COUNT(*) AS neg_tweet_count FROM twitter AS T1 JOIN location AS T2 ON T1.LocationID = T2.LocationID WHERE T1.Sentiment < 0 AND T2.City = 'Chicago' GROUP BY T2.Day"
             }
         ],
         "analysis": "Merge the two query results on the day field, then compute the Pearson correlation coefficient between crime_count and neg_tweet_count.",
-        "result/answer": 0.8
+        "result": {
+            "r": 0.8
+        },
+        "tolerance": {
+            "r": 0.05
+        }
     }
 ]
 ```
+
+**Field reference:**
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | int | Unique task identifier |
+| `difficulty` | string | `"simple"`, `"intermediate"`, or `"challenging"` |
+| `question` | string | Natural language question posed to the model |
+| `evidence` | string | Clarifies domain-specific terms, thresholds, and column references |
+| `db_id` | string[] | List of database names required to answer the question |
+| `intermediate_sqls` | object[] | Gold SQL queries per database (`db` + `sql` keys); used to validate model output |
+| `analysis` | string | Steps to derive the final answer from raw query results |
+| `result` | object | Expected answer; keys match what the model should return |
+| `tolerance` | object | Per-key numeric tolerance for answer comparison (same keys as `result`) |
 
 ### Step 5: Validation
 
@@ -131,6 +149,135 @@ One person generates the task, and the remaining three members independently val
 5. **Result format** — Is the expected output clearly defined and reproducible?
 
 If any validator flags an issue, the task is sent back to the author for revision before being finalized.
+
+---
+
+# Running the Evaluation
+
+## Prerequisites
+
+```bash
+pip install anthropic openai python-dotenv
+```
+
+Create a `.env` file in the project root:
+```
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...         # only needed for GPT models
+```
+
+The SQLite databases are not included in the repo (listed in `.gitignore`). Place them at `dev/databases/<db_name>/<db_name>.sqlite`.
+
+---
+
+## Scripts
+
+### `dump_schemas.py` — Extract schemas for offline use
+
+Dumps all database schemas to a single JSON file. Run this once on the machine where the databases live; the output can be used locally by `run_baseline.py`.
+
+```bash
+python dump_schemas.py --database-dir /path/to/databases --output schemas.json
+```
+
+| Argument | Required | Default | Description |
+|---|---|---|---|
+| `--database-dir` | ✓ | — | Directory containing database subdirectories |
+| `--output` | | `schemas.json` | Output JSON file path |
+
+---
+
+### `run_benchmark.py` — Execute gold SQL queries
+
+Runs the pre-defined gold SQL queries from a benchmark file and prints formatted results. Useful for inspecting expected outputs; does not call any LLM.
+
+```bash
+python run_benchmark.py dev_benchmark_gab.json results.txt -d /path/to/databases
+```
+
+| Argument | Required | Default | Description |
+|---|---|---|---|
+| `benchmark_json` | ✓ | — | Path to benchmark JSON file |
+| `output_file` | ✓ | — | Path to output text file |
+| `-d / --database-dir` | | `data/dev_20240627/dev_databases/dev_databases` | Database directory |
+
+---
+
+### `run_baseline.py` — Single-prompt LLM evaluation (root-level)
+
+Sends the merged schema + question to Claude in a single turn, executes the returned SQL, applies statistical post-processing, and scores against gold answers.
+
+```bash
+python run_baseline.py dev_benchmark_gab.json results.txt \
+  --schema-file schemas.json \
+  --database-dir /path/to/databases \
+  --model claude-sonnet-4-6
+```
+
+| Argument | Required | Default | Description |
+|---|---|---|---|
+| `benchmark_json` | ✓ | — | Path to benchmark JSON file |
+| `output_file` | ✓ | — | Path to output text file |
+| `--schema-file` | ✓ | — | Path to `schemas.json` from `dump_schemas.py` |
+| `--database-dir` | ✓ | — | Path to directory containing SQLite databases |
+| `--model` | | `claude-sonnet-4-5` | Anthropic model ID |
+
+---
+
+### `src/run_agent.py` — Multi-step agentic evaluation
+
+Runs a three-step agentic pipeline: database selection → SQL generation → Python-based result analysis. Supports automatic retries on SQL failure and validates intermediate SQL against gold queries. Outputs `results.json`, `log.json`, and `summary.json` to a timestamped directory.
+
+```bash
+python src/run_agent.py \
+  --task dev/task.json \
+  --db dev/databases \
+  --model claude-sonnet-4-6 \
+  --output-dir results/my_run
+```
+
+| Argument | Required | Default | Description |
+|---|---|---|---|
+| `--task` | | `dev/task.json` | Path to task JSON file |
+| `--db` | | `dev/databases` | Path to database directory |
+| `--model` | | `claude-sonnet-4-6` | Model ID |
+| `--output-dir` | | auto-timestamped | Output directory for results |
+| `--ids` | | all | Space-separated list of task IDs to run |
+| `--start` | | — | Skip tasks with `id` less than this value |
+| `--summarize` | | — | Recompute `summary.json` from existing `results.json` and exit |
+| `--reprice` | | — | Recompute `cost_usd` using current pricing and rewrite `summary.json` |
+
+---
+
+### `src/run_baseline.py` — Enhanced single-prompt evaluation
+
+Similar to root `run_baseline.py` but supports both Anthropic and OpenAI models, validates database selection, checks intermediate SQL matching, and reports accuracy by difficulty level.
+
+```bash
+python src/run_baseline.py \
+  --task dev/task.json \
+  --db dev/databases \
+  --model claude-haiku-4-5-20251001 \
+  --output-dir results/haiku_baseline
+```
+
+Arguments are identical to `src/run_agent.py`. Default model is `claude-haiku-4-5-20251001`. For OpenAI models, prefix the model name with `gpt-` (e.g. `--model gpt-4o`).
+
+---
+
+### `src/run_trials.py` — Aggregate best-of-N trial results
+
+Takes multiple trial directories (each containing a `results.json`) and produces an aggregated result that picks the best answer per task across all trials.
+
+```bash
+python src/run_trials.py results/trial1 results/trial2 results/trial3 \
+  --output results/best_of_3.json
+```
+
+| Argument | Required | Default | Description |
+|---|---|---|---|
+| `trial_dirs` | ✓ | — | One or more paths to trial output directories |
+| `--output` | | stdout | Write aggregated JSON to this file |
 
 ---
 
